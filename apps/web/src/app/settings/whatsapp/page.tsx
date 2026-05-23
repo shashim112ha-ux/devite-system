@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { trpc } from "../../utils/trpc";
 import {
   MessageCircle, Save, Send, CheckCircle, XCircle, Phone,
-  Users, Shield, Bell, AlertTriangle, Toggle, RefreshCw, Info
+  Users, Shield, Bell, AlertTriangle, RefreshCw, Info
 } from "lucide-react";
 
 const NOTIFICATION_TYPES = [
