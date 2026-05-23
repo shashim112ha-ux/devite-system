@@ -893,12 +893,13 @@ export const appRouter = router({
         });
       } else {
         // If the user already exists (e.g. employee), upgrade their role to INVESTOR_STAFF
-        if (existingUser.role !== 'ADMIN' && existingUser.role !== 'MANAGER' && existingUser.role !== 'INVESTOR') {
+        const role = existingUser.role as string;
+        if (role !== 'ADMIN' && role !== 'MANAGER' && role !== 'INVESTOR') {
           await ctx.prisma.user.update({
             where: { id: existingUser.id },
             data: { role: 'INVESTOR_STAFF' }
           });
-        } else if (existingUser.role === 'STAFF_INVESTOR' || existingUser.role === 'INVESTOR_STAFF') {
+        } else if (role === 'STAFF_INVESTOR' || role === 'INVESTOR_STAFF') {
            // Do nothing
         }
       }
