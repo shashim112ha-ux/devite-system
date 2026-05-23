@@ -38,7 +38,7 @@ export default function RootLayout({
     trpc.createClient({
       links: [
         httpBatchLink({
-          url: "http://127.0.0.1:4000/trpc",
+          url: process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:4000/trpc",
           headers() {
             const token = typeof window !== 'undefined' ? localStorage.getItem('userToken') : null;
             return token ? { Authorization: `Bearer ${token}` } : {};
