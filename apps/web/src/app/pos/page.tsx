@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { trpc } from "../utils/trpc";
 import { 
   ShoppingCart, Search, Plus, Minus, CreditCard, Banknote, 
-  User, Sparkles, X, Coffee, ListFilter, Trash2, Award 
+  User, Sparkles, X, Coffee, ListFilter, Trash2, Award, ChevronUp, ChevronDown 
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PrintableInvoice } from "../../components/PrintableInvoice";
@@ -27,6 +27,7 @@ export default function POSPage() {
   const [customerPoints, setCustomerPoints] = useState<number | null>(null);
   const [isSearchingCustomer, setIsSearchingCustomer] = useState<boolean>(false);
   const [paymentMethod, setPaymentMethod] = useState<string>("CASH");
+  const [isCartExpanded, setIsCartExpanded] = useState<boolean>(false);
 
   const [lastOrder, setLastOrder] = useState<any>(null);
 
@@ -212,9 +213,18 @@ export default function POSPage() {
   return (<div className="flex flex-col-reverse lg:flex-row h-screen bg-brand-black text-white font-sans overflow-hidden">
       
       {/* سلة المشتريات الجانبية */}
-      <div className="w-full lg:w-[420px] h-[45vh] lg:h-full bg-brand-navy border-t lg:border-t-0 lg:border-l border-white/5 p-4 lg:p-6 flex flex-col justify-between print:hidden overflow-hidden shrink-0">
+      <div className={`w-full lg:w-[420px] ${isCartExpanded ? 'h-[75vh]' : 'h-12'} lg:h-full bg-brand-navy border-t lg:border-t-0 lg:border-l border-white/5 flex flex-col justify-between print:hidden overflow-hidden shrink-0 transition-all duration-300 z-20`}>
         
-        <div className="flex flex-col flex-1 overflow-hidden">
+        {/* زر تصغير/تكبير السلة للموبايل */}
+        <button 
+          onClick={() => setIsCartExpanded(!isCartExpanded)}
+          className="lg:hidden w-full h-12 bg-brand-orange text-black font-bold flex items-center justify-center gap-2 shrink-0 shadow-lg"
+        >
+          {isCartExpanded ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
+          {isCartExpanded ? 'إخفاء تفاصيل السلة' : `عـرض السلـة - المجمـوع: ${total.toFixed(2)} د.ب`}
+        </button>
+
+        <div className={`flex-col flex-1 overflow-hidden p-4 lg:p-6 ${!isCartExpanded ? 'hidden lg:flex' : 'flex'}`}>
           <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/5">
             <div className="flex items-center gap-3">
               <ShoppingCart className="text-brand-orange" size={24} />
@@ -243,13 +253,18 @@ export default function POSPage() {
                       <h4 className="font-bold text-base text-white">{item.name}</h4>
                       <p className="text-brand-gold text-sm font-bold mt-1">{item.price} د.ب</p>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <button onClick={() => updateQuantity(item.cartItemId, -1)} className="bg-brand-black p-2 rounded-xl border border-white/5 hover:bg-brand-orange hover:text-black transition-all">
-                        <Minus size={14} />
-                      </button>
-                      <span className="font-black text-lg w-6 text-center">{item.quantity}</span>
-                      <button onClick={() => updateQuantity(item.cartItemId, 1)} className="bg-brand-black p-2 rounded-xl border border-white/5 hover:bg-brand-orange hover:text-black transition-all">
-                        <Plus size={14} />
+                    <div className="flex flex-col items-end gap-2">
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => updateQuantity(item.cartItemId, -1)} className="bg-brand-black p-2 rounded-xl border border-white/5 hover:bg-brand-orange hover:text-black transition-all">
+                          <Minus size={14} />
+                        </button>
+                        <span className="font-black text-lg w-6 text-center">{item.quantity}</span>
+                        <button onClick={() => updateQuantity(item.cartItemId, 1)} className="bg-brand-black p-2 rounded-xl border border-white/5 hover:bg-brand-orange hover:text-black transition-all">
+                          <Plus size={14} />
+                        </button>
+                      </div>
+                      <button onClick={() => removeFromCart(item.cartItemId)} className="text-[10px] text-red-500 hover:text-red-400 font-bold bg-red-500/10 px-2 py-1 rounded-md transition-colors flex items-center gap-1">
+                        <Trash2 size={12} /> حذف
                       </button>
                     </div>
                   </div>
@@ -359,7 +374,6 @@ export default function POSPage() {
           </div>
 
         </div>
-
       </div>
 
       {/* شاشة اختيار المنتجات الرئيسية */}
