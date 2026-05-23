@@ -1394,6 +1394,17 @@ export const appRouter = router({
       });
     }),
 
+  deleteShiftSchedule: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      // Allow managers/admins to delete
+      const user = ctx.user as any;
+      if (user.role !== 'ADMIN' && user.role !== 'MANAGER') {
+        throw new Error('UNAUTHORIZED');
+      }
+      return ctx.prisma.shiftSchedule.delete({ where: { id: input.id } });
+    }),
+
   requestShift: protectedProcedure
     .input(z.object({
       date: z.string(),
