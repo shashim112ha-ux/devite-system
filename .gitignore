@@ -16,3 +16,4 @@ pnpm-debug.log*
 apps/server/backup_*.db
 apps/server/dev.db
 
+# Force trigger
