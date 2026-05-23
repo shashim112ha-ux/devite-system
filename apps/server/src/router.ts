@@ -893,7 +893,7 @@ export const appRouter = router({
         });
       } else {
         // If the user already exists (e.g. employee), upgrade their role to INVESTOR_STAFF
-        const role = existingUser.role as string;
+        const role = existingUser.role as any;
         if (role !== 'ADMIN' && role !== 'MANAGER' && role !== 'INVESTOR') {
           await ctx.prisma.user.update({
             where: { id: existingUser.id },
