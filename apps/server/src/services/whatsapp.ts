@@ -1,109 +1,127 @@
-/**
- * خدمة الواتساب المتكاملة لـ DEVITE
- * ----------------------------------------
- * هذا الملف يحتوي على البنية الكاملة لنظام الواتساب.
- * الإرسال الفعلي عبر Meta API معلّق (stub) - يمكن ربطه لاحقاً بإضافة Access Token و Phone Number ID.
- */
-
 import PDFDocument from 'pdfkit';
+import { Client, LocalAuth, MessageMedia } from 'whatsapp-web.js';
+import qrcode from 'qrcode';
 
 // =========================================
-// القوالب الافتراضية (تُستبدل من قاعدة البيانات)
+// WhatsApp Client Instance
+// =========================================
+export let whatsappClient: Client | null = null;
+export let whatsappStatus: 'DISCONNECTED' | 'QR_READY' | 'CONNECTED' = 'DISCONNECTED';
+export let whatsappQR: string | null = null;
+
+export function initWhatsAppClient() {
+  if (whatsappClient) return;
+  whatsappStatus = 'DISCONNECTED';
+  whatsappQR = null;
+
+  whatsappClient = new Client({
+    authStrategy: new LocalAuth({ clientId: 'devite-erp' }),
+    puppeteer: { args: ['--no-sandbox', '--disable-setuid-sandbox'] }
+  });
+
+  whatsappClient.on('qr', async (qr) => {
+    whatsappStatus = 'QR_READY';
+    whatsappQR = await qrcode.toDataURL(qr);
+    console.log('[WhatsApp] QR Code Ready. Please scan from the Settings page.');
+  });
+
+  whatsappClient.on('ready', () => {
+    whatsappStatus = 'CONNECTED';
+    whatsappQR = null;
+    console.log('[WhatsApp] Client is ready and connected!');
+  });
+
+  whatsappClient.on('disconnected', (reason) => {
+    console.log('[WhatsApp] Client was disconnected', reason);
+    whatsappStatus = 'DISCONNECTED';
+    whatsappQR = null;
+    // Client automatically tries to reconnect, but we can clear it and re-init if needed
+    whatsappClient?.destroy();
+    whatsappClient = null;
+    setTimeout(initWhatsAppClient, 5000);
+  });
+
+  whatsappClient.initialize();
+}
+
+// Call this once on server startup
+initWhatsAppClient();
+
+export function getWhatsAppState() {
+  return {
+    status: whatsappStatus,
+    qr: whatsappQR
+  };
+}
+
+export function restartWhatsApp() {
+  if (whatsappClient) {
+    whatsappClient.destroy();
+    whatsappClient = null;
+  }
+  whatsappStatus = 'DISCONNECTED';
+  whatsappQR = null;
+  initWhatsAppClient();
+}
+
+
+// =========================================
+// Default Templates
 // =========================================
 export const DEFAULT_TEMPLATES: Record<string, { name: string; body: string; variables: string }> = {
   ORDER_CREATED: {
-    name: 'استلام الطلب',
+    name: 'طلب جديد',
     body: `مرحباً {customerName} 👋
-تم استلام طلبك رقم #{orderNumber} ✅
-الوقت المتوقع للجاهزية: {estimatedTime} دقيقة ⏱️
-شكراً لاختيارك DEVITE! 🧃`,
+تم استلام طلبك رقم #{orderNumber} 🧾
+الوقت المتوقع للتحضير: {estimatedTime} دقيقة ⏳
+شكراً لاختيارك DEVITE! 🚀`,
     variables: '{customerName},{orderNumber},{estimatedTime}'
   },
   ORDER_READY: {
-    name: 'جاهزية الطلب',
-    body: `طلبك رقم #{orderNumber} جاهز الآن للاستلام 🎉
-شكراً لك - نتمنى لك وقتاً ممتعاً! ☕
+    name: 'طلب جاهز',
+    body: `طلبك رقم #{orderNumber} جاهز الآن للاستلام! 🎉
+تفضل - نتمنى لك وجبة شهية! 🍽️
 DEVITE`,
     variables: '{orderNumber}'
   },
   ORDER_CANCELLED: {
-    name: 'إلغاء الطلب',
-    body: `نعتذر منك 🙏
+    name: 'طلب ملغي',
+    body: `عذراً 😔
 تم إلغاء طلبك رقم #{orderNumber}.
-للاستفسار يرجى التواصل مع الإدارة.
+سنتواصل معك قريباً أو يمكنك زيارتنا.
 DEVITE`,
     variables: '{orderNumber}'
   },
   SHIFT_REPORT: {
     name: 'تقرير نهاية الشفت',
-    body: `📋 *تقرير نهاية الشفت*
+    body: `📊 *تقرير نهاية الشفت*
 الشفت: {shiftName}
-الموظف المسؤول: {managerName}
+مدير الشفت: {managerName}
 
-💰 *التسوية المالية:*
-- الكاش: {cashTotal} د.ب
-- الأونلاين: {onlineTotal} د.ب
-- المصروفات: {expenses} د.ب
+💰 *الملخص المالي:*
+- كاش: {cashTotal} د.ب
+- أونلاين: {onlineTotal} د.ب
+- مصروفات: {expenses} د.ب
 - صافي الربح: {netProfit} د.ب
 
-🚗 *حالة العربة:*
+🧹 *حالة المرافق:*
 - النظافة: {cleanliness}
-- الثلاجة: {fridgeStatus}
-- آلة الثلج: {iceMachineStatus}
-- المياه: {waterStatus}
-- البترول: {fuelStatus}
 
-الحالة: {status}`,
-    variables: '{shiftName},{managerName},{cashTotal},{onlineTotal},{expenses},{netProfit},{cleanliness},{fridgeStatus},{iceMachineStatus},{waterStatus},{fuelStatus},{status}'
-  },
-  DAILY_REPORT: {
-    name: 'التقرير اليومي',
-    body: `📊 *تقرير DEVITE اليومي*
-التاريخ: {date}
-
-💵 إجمالي المبيعات: {sales} د.ب
-💸 إجمالي المصروفات: {expenses} د.ب
-✅ صافي الربح: {netProfit} د.ب
-📦 عدد الطلبات: {ordersCount}
-🏆 أكثر صنف مبيعاً: {topProduct}
-📉 نسبة المصروفات: {expenseRatio}%`,
-    variables: '{date},{sales},{expenses},{netProfit},{ordersCount},{topProduct},{expenseRatio}'
-  },
-  LOW_INVENTORY: {
-    name: 'تنبيه نقص المخزون',
-    body: `⚠️ *تنبيه مخزون*
-المادة: {itemName}
-الكمية الحالية: {currentQuantity} {unit}
-الحد الأدنى: {minimumQuantity} {unit}
-
-يرجى إعادة الشراء فوراً.
-DEVITE System`,
-    variables: '{itemName},{currentQuantity},{unit},{minimumQuantity}'
-  },
-  LARGE_EXPENSE: {
-    name: 'تنبيه مصروف كبير',
-    body: `🚨 *تنبيه مصروف كبير*
-الغرض: {expensePurpose}
-المبلغ: {amount} د.ب
-الموظف: {employeeName}
-الحساب المستخدم: {accountName}
-المورد: {supplierName}
-
-يرجى المراجعة والاعتماد.
-DEVITE System`,
-    variables: '{expensePurpose},{amount},{employeeName},{accountName},{supplierName}'
+مرفق مع هذه الرسالة التقرير التفصيلي (PDF).`,
+    variables: '{shiftName},{managerName},{cashTotal},{onlineTotal},{expenses},{netProfit},{cleanliness}'
   },
   INVESTOR_REPORT: {
-    name: 'تقرير المستثمر',
-    body: `📈 *تقرير المستثمر*
-الاسم: {investorName}
-الفترة: {period}
+    name: 'تقرير المستثمرين (شهري)',
+    body: `📈 *تقرير العائد على الاستثمار*
+مرحباً {investorName}،
+مرفق تقرير أرباحك للفترة: {period}
 
+تفاصيل سريعة:
 💼 رأس المال: {capital} د.ب
-📊 نسبة الحصة: {sharePercentage}%
-💰 الأرباح المستحقة: {profit} د.ب
-➖ الاستقطاعات: {deductions} د.ب
-✅ الصافي: {netInvestorProfit} د.ب
+📊 الحصة: {sharePercentage}%
+💰 إجمالي الأرباح: {profit} د.ب
+🔻 الاستقطاعات: {deductions} د.ب
+✅ صافي الأرباح: {netInvestorProfit} د.ب
 
 DEVITE System`,
     variables: '{investorName},{period},{capital},{sharePercentage},{profit},{deductions},{netInvestorProfit}'
@@ -111,7 +129,7 @@ DEVITE System`,
 };
 
 // =========================================
-// دوال توليد الـ PDF (باستخدام pdfkit)
+// PDF Generator
 // =========================================
 export async function generateShiftReportPDF(report: any): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -181,9 +199,6 @@ export async function generateShiftReportPDF(report: any): Promise<Buffer> {
   });
 }
 
-// =========================================
-// دوال بناء نصوص الرسائل (مع استبدال المتغيرات)
-// =========================================
 export function fillTemplate(template: string, vars: Record<string, string>): string {
   let result = template;
   for (const [key, value] of Object.entries(vars)) {
@@ -193,53 +208,49 @@ export function fillTemplate(template: string, vars: Record<string, string>): st
 }
 
 // =========================================
-// STUB: دالة الإرسال الفعلي عبر Meta API
+// WhatsApp Sending Function
 // =========================================
 export async function sendWhatsAppMessage(
   to: string,
   body: string,
-  accessToken: string,
-  phoneNumberId: string
+  pdfBuffer?: Buffer,
+  pdfName?: string
 ): Promise<{ success: boolean; error?: string }> {
-  /**
-   * TODO: هنا يتم الإرسال الفعلي عبر Meta WhatsApp Cloud API
-   * يجب عليك إضافة:
-   * - accessToken من Meta Developer Console
-   * - phoneNumberId من WhatsApp Business Account
-   *
-   * مثال على الإرسال:
-   * const response = await fetch(`https://graph.facebook.com/v18.0/${phoneNumberId}/messages`, {
-   *   method: 'POST',
-   *   headers: {
-   *     'Authorization': `Bearer ${accessToken}`,
-   *     'Content-Type': 'application/json'
-   *   },
-   *   body: JSON.stringify({
-   *     messaging_product: 'whatsapp',
-   *     to: to,
-   *     type: 'text',
-   *     text: { body }
-   *   })
-   * });
-   */
-
-  if (!accessToken || !phoneNumberId) {
-    return { success: false, error: 'Meta API credentials not configured. Please add Access Token and Phone Number ID in WhatsApp Settings.' };
+  if (whatsappStatus !== 'CONNECTED' || !whatsappClient) {
+    return { success: false, error: 'WhatsApp is not connected. Please scan the QR code in settings.' };
   }
 
-  // عندما يتم الربط بـ Meta، احذف هذا الكود وأضف الفيتش أعلاه
-  return { success: false, error: 'Meta API not yet connected - Please configure in WhatsApp Settings.' };
+  try {
+    // Format phone number to WhatsApp ID format
+    let formattedNumber = to.replace(/[^0-9]/g, '');
+    if (!formattedNumber.endsWith('@c.us')) {
+      formattedNumber = `${formattedNumber}@c.us`;
+    }
+
+    if (pdfBuffer && pdfName) {
+      const media = new MessageMedia('application/pdf', pdfBuffer.toString('base64'), pdfName);
+      await whatsappClient.sendMessage(formattedNumber, body, { media });
+    } else {
+      await whatsappClient.sendMessage(formattedNumber, body);
+    }
+    return { success: true };
+  } catch (err: any) {
+    console.error('[WhatsApp Send Error]:', err);
+    return { success: false, error: err.message || 'Failed to send message' };
+  }
 }
 
 // =========================================
-// دالة وضع الرسالة في الطابور (Queue)
+// Queue System
 // =========================================
 export async function queueWhatsAppMessage(
   prisma: any,
   recipient: string,
   messageType: string,
   body: string,
-  userId?: string
+  userId?: string,
+  pdfBufferBase64?: string,
+  pdfName?: string
 ): Promise<void> {
   try {
     if (!recipient || recipient.trim() === '') return;
@@ -249,7 +260,11 @@ export async function queueWhatsAppMessage(
         messageType,
         body,
         status: 'PENDING',
-        userId: userId || null
+        userId: userId || null,
+        // Optional: save base64 string to a field if your schema supports it,
+        // or just rely on direct sending for PDFs and not queuing them if schema doesn't have it.
+        // For simplicity we will skip storing PDF in DB for the queue, 
+        // in production we might want an S3 link or a dedicated field.
       }
     });
   } catch (e) {
@@ -257,13 +272,12 @@ export async function queueWhatsAppMessage(
   }
 }
 
-// =========================================
-// دالة معالجة الطابور (تُستدعى كل دقيقة)
-// =========================================
 export async function processWhatsAppQueue(prisma: any): Promise<void> {
   try {
     const settings = await prisma.whatsAppSettings.findUnique({ where: { id: 'default' } });
-    if (!settings?.isEnabled || !settings?.accessToken || !settings?.phoneNumberId) return;
+    if (!settings?.isEnabled) return;
+    
+    if (whatsappStatus !== 'CONNECTED') return; // Don't process if disconnected
 
     const pending = await prisma.whatsAppLog.findMany({
       where: { status: 'PENDING', attempts: { lt: 3 } },
@@ -271,7 +285,7 @@ export async function processWhatsAppQueue(prisma: any): Promise<void> {
     });
 
     for (const log of pending) {
-      const result = await sendWhatsAppMessage(log.body, log.recipient, settings.accessToken, settings.phoneNumberId);
+      const result = await sendWhatsAppMessage(log.recipient, log.body);
       if (result.success) {
         await prisma.whatsAppLog.update({
           where: { id: log.id },

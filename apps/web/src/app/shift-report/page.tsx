@@ -94,6 +94,11 @@ export default function ShiftReportPage() {
     onError: (err) => alert(`خطأ: ${err.message}`)
   });
 
+  const sendWhatsAppMutation = trpc.sendShiftReportWhatsApp.useMutation({
+    onSuccess: () => alert("تم الإرسال بنجاح عبر الواتساب مع التقرير (PDF)!"),
+    onError: (e) => alert("خطأ في الإرسال: " + e.message)
+  });
+
   const resetForm = () => {
     setDailyIncome(todayStats?.dailyIncome?.toString() || "0");
     setExpenses(todayStats?.expenses?.toString() || "0");
@@ -751,6 +756,17 @@ export default function ShiftReportPage() {
                         </span>
                       </td>
                       <td className="p-4 text-center flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => {
+                             const phone = prompt("أدخل رقم الواتساب للإرسال الآلي مع الـ PDF (شامل رمز الدولة مثل +973...):");
+                             if (phone) sendWhatsAppMutation.mutate({ id: row.id, phone });
+                          }}
+                          disabled={sendWhatsAppMutation.isLoading}
+                          className="bg-green-600 hover:bg-green-500 text-white font-bold p-2 rounded-lg text-xs transition-all shadow-md shadow-green-500/20"
+                          title="إرسال آلي عبر النظام (مع PDF)"
+                        >
+                          <MessageCircle size={14} className="mx-auto" />
+                        </button>
                         <button
                           onClick={() => sendToWhatsApp(row)}
                           className="bg-green-500/10 hover:bg-green-500/20 text-green-500 font-bold p-2 rounded-lg text-xs transition-all"

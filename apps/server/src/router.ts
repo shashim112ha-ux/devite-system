@@ -13,7 +13,7 @@ import {
   investorProcedure
 } from './trpc';
 import { io } from './index';
-import { queueWhatsAppMessage, DEFAULT_TEMPLATES, generateShiftReportPDF, fillTemplate } from './services/whatsapp';
+import { queueWhatsAppMessage, DEFAULT_TEMPLATES, generateShiftReportPDF, fillTemplate, getWhatsAppState, restartWhatsApp } from './services/whatsapp';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'devite_super_secret_key';
 
@@ -1321,6 +1321,39 @@ export const appRouter = router({
       return report;
     }),
 
+    sendShiftReportWhatsApp: managerProcedure
+      .input(z.object({ id: z.string(), phone: z.string() }))
+      .mutation(async ({ input, ctx }) => {
+        const report = await ctx.prisma.shiftReport.findUnique({
+          where: { id: input.id },
+          include: { cashier: true }
+        });
+        if (!report) throw new Error('التقرير غير موجود');
+
+        // Generate PDF
+        const pdfBuffer = await generateShiftReportPDF(report);
+
+        // Fill Template
+        const template = DEFAULT_TEMPLATES['SHIFT_REPORT'];
+        const body = fillTemplate(template.body, {
+          shiftName: new Date(report.date).toLocaleDateString('ar-BH'),
+          managerName: report.cashier?.name || 'غير معروف',
+          cashTotal: report.cashAmount.toFixed(3),
+          onlineTotal: report.cardAmount.toFixed(3),
+          expenses: report.expenses.toFixed(3),
+          netProfit: report.netProfit.toFixed(3),
+          cleanliness: report.cleanlinessInternal ? 'ممتاز' : 'يحتاج انتباه'
+        });
+
+        // Queue message with PDF (using the base64 string or we can send it directly since queueWhatsAppMessage doesn't store PDFs in DB in our stub)
+        // Since we didn't add PDF buffer to the DB, we can send it directly right here!
+        const { sendWhatsAppMessage } = require('./services/whatsapp');
+        const result = await sendWhatsAppMessage(input.phone, body, pdfBuffer, `Shift_Report_${report.id}.pdf`);
+        
+        if (!result.success) throw new Error(result.error);
+        return { success: true };
+      }),
+
   getShiftReports: managerProcedure.query(async ({ ctx }) => {
     return ctx.prisma.shiftReport.findMany({
       include: { cashier: true },
@@ -1790,6 +1823,15 @@ export const appRouter = router({
   getWhatsAppSettings: adminProcedure.query(async ({ ctx }) => {
     const settings = await ctx.prisma.whatsAppSettings.findUnique({ where: { id: 'default' } });
     return settings;
+  }),
+
+  getWhatsAppStatus: adminProcedure.query(() => {
+    return getWhatsAppState();
+  }),
+
+  restartWhatsAppClient: adminProcedure.mutation(() => {
+    restartWhatsApp();
+    return { success: true };
   }),
 
   updateWhatsAppSettings: adminProcedure

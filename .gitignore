@@ -17,3 +17,7 @@ apps/server/backup_*.db
 apps/server/dev.db
 
 # Force trigger
+
+# WhatsApp Web JS
+.wwebjs_auth/
+.wwebjs_cache/

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { trpc } from "../../utils/trpc";
 import {
   MessageCircle, Save, Send, CheckCircle, XCircle, Phone,
-  Users, Shield, Bell, AlertTriangle, RefreshCw, Info
+  Users, Shield, Bell, AlertTriangle, RefreshCw, Info, QrCode, Power
 } from "lucide-react";
 
 const NOTIFICATION_TYPES = [
@@ -21,6 +21,11 @@ const NOTIFICATION_TYPES = [
 export default function WhatsAppSettingsPage() {
   const utils = trpc.useContext();
   const { data: settings, isLoading } = trpc.getWhatsAppSettings.useQuery();
+  const { data: waStatus } = trpc.getWhatsAppStatus.useQuery(undefined, { refetchInterval: 3000 });
+  const restartMutation = trpc.restartWhatsAppClient.useMutation({
+    onSuccess: () => utils.getWhatsAppStatus.invalidate()
+  });
+
   const updateMutation = trpc.updateWhatsAppSettings.useMutation({
     onSuccess: () => { utils.getWhatsAppSettings.invalidate(); setSaved(true); setTimeout(() => setSaved(false), 2000); },
   });
@@ -37,8 +42,6 @@ export default function WhatsAppSettingsPage() {
   const [form, setForm] = useState({
     isEnabled: false,
     officialNumber: "",
-    accessToken: "",
-    phoneNumberId: "",
     managerNumbers: "",
     supervisorNumbers: "",
     investorNumbers: "",
@@ -62,7 +65,7 @@ export default function WhatsAppSettingsPage() {
   const handleSave = () => updateMutation.mutate(form as any);
   const toggle = (key: string) => setForm(f => ({ ...f, [key]: !(f as any)[key] }));
 
-  const isConnected = settings?.isEnabled && settings?.accessToken && settings?.phoneNumberId;
+  const isConnected = waStatus?.status === 'CONNECTED';
 
   if (isLoading) return <div className="p-8 text-gray-400 animate-pulse">جاري التحميل...</div>;
 
@@ -93,30 +96,42 @@ export default function WhatsAppSettingsPage() {
         </div>
       </section>
 
-      {/* API Credentials */}
+      {/* WhatsApp Connection Status */}
       <section className="bg-brand-navy border border-white/10 rounded-3xl p-6 space-y-6">
-        <h2 className="text-xl font-black text-white flex items-center gap-2"><Shield size={20} className="text-brand-orange" /> بيانات ربط Meta API</h2>
-        <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4 text-blue-300 text-sm flex gap-2">
-          <Info size={16} className="shrink-0 mt-0.5" />
-          <span>احصل على هذه البيانات من حسابك على <strong>Meta Developer Console</strong> بعد إعداد WhatsApp Business Account.</span>
+        <div className="flex justify-between items-center">
+           <h2 className="text-xl font-black text-white flex items-center gap-2"><QrCode size={20} className="text-brand-orange" /> حالة اتصال واتساب</h2>
+           <button onClick={() => restartMutation.mutate()} disabled={restartMutation.isLoading} className="bg-white/10 hover:bg-white/20 p-2 rounded-xl text-sm flex items-center gap-2 transition-colors">
+              <Power size={16} /> إعادة تشغيل الاتصال
+           </button>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[
-            { label: "Access Token", key: "accessToken", placeholder: "EAAG..." },
-            { label: "Phone Number ID", key: "phoneNumberId", placeholder: "106..." },
-          ].map(({ label, key, placeholder }) => (
-            <div key={key}>
-              <label className="text-xs text-brand-gold font-bold uppercase tracking-widest block mb-2">{label}</label>
-              <input
-                type="password"
-                value={(form as any)[key]}
-                onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                placeholder={placeholder}
-                className="w-full bg-brand-black border border-white/10 p-4 rounded-2xl text-sm text-white outline-none focus:border-brand-orange font-mono"
-              />
-            </div>
-          ))}
-        </div>
+
+        {waStatus?.status === 'DISCONNECTED' && (
+           <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-6 text-center space-y-3">
+              <XCircle size={40} className="mx-auto text-red-400" />
+              <h3 className="font-bold text-red-400">غير متصل بالواتساب</h3>
+              <p className="text-sm text-red-300">جاري محاولة الاتصال أو يرجى الضغط على زر إعادة التشغيل...</p>
+           </div>
+        )}
+
+        {waStatus?.status === 'QR_READY' && waStatus.qr && (
+           <div className="bg-brand-black border border-white/5 rounded-2xl p-8 text-center space-y-6">
+              <div className="bg-white p-4 inline-block rounded-xl">
+                 <img src={waStatus.qr} alt="WhatsApp QR Code" className="w-64 h-64 object-contain" />
+              </div>
+              <div>
+                 <h3 className="font-bold text-brand-orange text-lg">امسح الكود لربط النظام بالواتساب</h3>
+                 <p className="text-sm text-gray-400 mt-2">افتح تطبيق الواتساب في هاتفك > الإعدادات > الأجهزة المرتبطة > ربط جهاز، ثم وجه الكاميرا نحو هذا الرمز.</p>
+              </div>
+           </div>
+        )}
+
+        {waStatus?.status === 'CONNECTED' && (
+           <div className="bg-green-500/10 border border-green-500/20 rounded-2xl p-6 text-center space-y-3">
+              <CheckCircle size={40} className="mx-auto text-green-400" />
+              <h3 className="font-bold text-green-400 text-lg">تم الربط بنجاح!</h3>
+              <p className="text-sm text-green-300">النظام متصل الآن وجاهز لإرسال الإشعارات والتقارير عبر الواتساب.</p>
+           </div>
+        )}
       </section>
 
       {/* Phone Numbers */}
