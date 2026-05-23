@@ -55,7 +55,7 @@ export default function ProfessionalKitchen() {
 
   // Socket.io listener for real-time updates
   useEffect(() => {
-    const socket = io("http://127.0.0.1:4000");
+    const socket = io(typeof window !== "undefined" ? `http://${window.location.hostname}:4000` : "http://127.0.0.1:4000");
 
     socket.on("order_created", (newOrder) => {
       ordersQuery.refetch();

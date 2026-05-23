@@ -35,7 +35,7 @@ export default function AdminDashboard() {
 
   // WebSocket Live alerts listener
   useEffect(() => {
-    const socket = io("http://127.0.0.1:4000");
+    const socket = io(typeof window !== "undefined" ? `http://${window.location.hostname}:4000` : "http://127.0.0.1:4000");
 
     socket.on("low_stock_warning", (data) => {
       setNotifications(prev => [

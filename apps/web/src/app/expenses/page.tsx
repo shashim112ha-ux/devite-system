@@ -91,7 +91,8 @@ export default function ExpensesPage() {
       
       // Upload via backend /upload REST API
       try {
-        const response = await fetch("http://127.0.0.1:4000/upload", {
+        const uploadUrl = typeof window !== "undefined" ? `http://${window.location.hostname}:4000/upload` : "http://127.0.0.1:4000/upload";
+        const response = await fetch(uploadUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ image: base64 })
