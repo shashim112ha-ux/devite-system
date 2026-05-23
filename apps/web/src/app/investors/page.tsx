@@ -80,28 +80,10 @@ export default function InvestorsPage() {
 
   const handleCapitalChange = (val: string) => {
      setCapital(val);
-     const numVal = Number(val);
-     if (numVal > 0) {
-        // Here we do a simple assumption: the percentage is relative to the *new* total capital including this investor.
-        const newTotal = totalExistingCapital + numVal;
-        const autoPct = (numVal / newTotal) * 100;
-        setSharePercentage(autoPct.toFixed(2));
-     } else {
-        setSharePercentage("");
-     }
   };
 
   const handleEditCapitalChange = (val: string) => {
      setEditCapital(val);
-     const numVal = Number(val);
-     const otherCapital = totalExistingCapital - (selectedEditInvestor?.capital || 0);
-     if (numVal > 0) {
-        const newTotal = otherCapital + numVal;
-        const autoPct = (numVal / newTotal) * 100;
-        setEditSharePercentage(autoPct.toFixed(2));
-     } else {
-        setEditSharePercentage("");
-     }
   };
 
   const handleEditInvestorClick = (inv: any) => {
@@ -118,15 +100,7 @@ export default function InvestorsPage() {
   const handleEditInvestor = async (e: React.FormEvent) => {
     e.preventDefault();
     const cap = Number(editCapital);
-    const pct = Number(editSharePercentage);
-    
-    const otherPct = totalExistingPercentage - (selectedEditInvestor?.sharePercentage || 0);
-    if (otherPct + pct > 100) {
-       alert(`خطأ: مجموع النسب يتجاوز 100%. متبقي فقط ${(100 - otherPct).toFixed(2)}%`);
-       return;
-    }
-
-    if (!editName || !editPhone || isNaN(cap) || cap <= 0 || isNaN(pct) || pct <= 0) {
+    if (!editName || !editPhone || isNaN(cap) || cap <= 0) {
       alert("يرجى ملء الحقول بقيم صحيحة");
       return;
     }
@@ -137,7 +111,7 @@ export default function InvestorsPage() {
         phone: editPhone,
         email: editEmail || undefined,
         capital: cap,
-        sharePercentage: pct,
+        sharePercentage: 0, // Backend ignores this and auto-calculates based on capital
         isActive: editIsActive,
         notes: editNotes || undefined
       });
@@ -152,15 +126,9 @@ export default function InvestorsPage() {
   const handleAddInvestor = async (e: React.FormEvent) => {
     e.preventDefault();
     const cap = Number(capital);
-    const pct = Number(sharePercentage);
 
-    if (totalExistingPercentage + pct > 100) {
-       alert(`خطأ: مجموع النسب يتجاوز 100%. متبقي فقط ${(100 - totalExistingPercentage).toFixed(2)}%`);
-       return;
-    }
-
-    if (!name || !phone || isNaN(cap) || cap <= 0 || isNaN(pct) || pct <= 0) {
-      alert("يرجى ملء الحقول بقيم صحيحة");
+    if (!name || !phone || isNaN(cap) || cap <= 0) {
+      alert("يرجى ملء جميع الحقول الإجبارية بقيم صحيحة");
       return;
     }
     try {
@@ -169,8 +137,8 @@ export default function InvestorsPage() {
         phone, 
         email: email || undefined,
         capital: cap, 
-        sharePercentage: pct,
-        notes: notes || undefined
+        sharePercentage: 0, // Backend will auto-calculate based on capital
+        notes: notes || undefined 
       });
       alert("تمت إضافة الشريك المستثمر بنجاح");
       investorsQuery.refetch();
@@ -179,7 +147,6 @@ export default function InvestorsPage() {
       setPhone("");
       setEmail("");
       setCapital("");
-      setSharePercentage("");
       setNotes("");
     } catch (e: any) {
       alert(`خطأ: ${e.message}`);
