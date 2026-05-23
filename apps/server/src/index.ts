@@ -70,7 +70,7 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 4000;
 
-server.listen(Number(PORT), '0.0.0.0', () => {
+server.listen(Number(PORT), () => {
   console.log(`🚀 DEVITE Server running on http://127.0.0.1:${PORT}/trpc`);
   console.log(`🔌 Socket.io ready on ws://127.0.0.1:${PORT}`);
 });
