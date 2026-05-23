@@ -20,7 +20,9 @@ import {
   ClipboardCheck,
   MessageSquare,
   Calendar,
-  UserCheck
+  UserCheck,
+  Menu,
+  X
 } from "lucide-react";
 import Link from "next/link";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -71,6 +73,7 @@ function RoleGuard({ children, pathname }: { children: React.ReactNode, pathname
   const router = useRouter();
   const [role, setRole] = useState<string | null>(null);
   const [isClient, setIsClient] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
@@ -99,15 +102,36 @@ function RoleGuard({ children, pathname }: { children: React.ReactNode, pathname
 
   if (isAdminRoute) {
     return (
-      <div className="flex min-h-screen bg-brand-black text-white">
+      <div className="flex min-h-screen bg-brand-black text-white relative">
+        {/* Mobile Toggle Button */}
+        <button 
+          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+          className="md:hidden fixed top-4 right-4 z-50 bg-brand-orange p-3 rounded-full shadow-lg text-white"
+        >
+          {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
+
+        {/* Overlay for mobile */}
+        {isSidebarOpen && (
+          <div 
+            className="md:hidden fixed inset-0 bg-black/60 z-30" 
+            onClick={() => setIsSidebarOpen(false)}
+          />
+        )}
+
         {/* Admin Sidebar */}
-        <aside className="w-64 bg-brand-navy border-l border-white/5 flex flex-col print:hidden">
+        <aside className={`
+          w-64 bg-brand-navy border-l border-white/5 flex flex-col print:hidden
+          fixed inset-y-0 right-0 z-40 transform transition-transform duration-300 ease-in-out
+          md:relative md:translate-x-0
+          ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full'}
+        `}>
           <div className="p-8 text-center border-b border-white/5">
             <h2 className="text-2xl font-black text-brand-orange">DEVITE</h2>
             <p className="text-[10px] text-gray-500 uppercase tracking-widest mt-1">{role} Portal</p>
           </div>
           
-          <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+          <nav className="flex-1 p-4 space-y-2 overflow-y-auto" onClick={() => setIsSidebarOpen(false)}>
             {(role === 'ADMIN' || role === 'MANAGER') && (
               <>
                 <SidebarLink href="/dashboard" icon={<LayoutDashboard size={18} />} label="لوحة التحكم" active={pathname === '/dashboard'} />
