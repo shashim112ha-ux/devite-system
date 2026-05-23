@@ -209,10 +209,10 @@ export default function POSPage() {
     return matchesCategory && matchesSearch;
   });
 
-  return (<div className="flex h-screen bg-brand-black text-white font-sans overflow-hidden">
+  return (<div className="flex flex-col-reverse lg:flex-row h-screen bg-brand-black text-white font-sans overflow-hidden">
       
       {/* سلة المشتريات الجانبية */}
-      <div className="w-[420px] bg-brand-navy border-l border-white/5 p-6 flex flex-col justify-between h-full print:hidden">
+      <div className="w-full lg:w-[420px] h-[45vh] lg:h-full bg-brand-navy border-t lg:border-t-0 lg:border-l border-white/5 p-4 lg:p-6 flex flex-col justify-between print:hidden overflow-hidden shrink-0">
         
         <div className="flex flex-col flex-1 overflow-hidden">
           <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/5">
@@ -363,7 +363,7 @@ export default function POSPage() {
       </div>
 
       {/* شاشة اختيار المنتجات الرئيسية */}
-      <div className="flex-1 p-8 flex flex-col overflow-hidden">
+      <div className="flex-1 p-4 lg:p-8 flex flex-col overflow-hidden">
         
         {/* شريط البحث وتصفية التصنيفات */}
         <header className="flex flex-col gap-6 mb-8">
