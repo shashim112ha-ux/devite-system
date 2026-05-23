@@ -262,6 +262,11 @@ function ProductModal({ product, categories, inventory, onClose, onSave }: any) 
     product?.ingredients?.map((i: any) => ({ inventoryItemId: i.inventoryItemId, amountRequired: i.amountRequired })) ?? []
   );
 
+  const calculatedSystemCost = ingredients.reduce((sum, ing) => {
+    const invItem = inventory?.find((i: any) => i.id === ing.inventoryItemId);
+    return sum + (invItem ? invItem.unitPrice * ing.amountRequired : 0);
+  }, 0);
+
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
@@ -321,9 +326,16 @@ function ProductModal({ product, categories, inventory, onClose, onSave }: any) 
             <Field label="سعر البيع (د.ب)">
               <input type="number" value={form.price} onChange={e => setForm({...form, price: Number(e.target.value)})} className="field-input" />
             </Field>
-            <Field label="التكلفة (د.ب)">
-              <input type="number" value={form.cost} onChange={e => setForm({...form, cost: Number(e.target.value)})} className="field-input" />
-            </Field>
+            <div className="space-y-1">
+              <Field label="التكلفة اليدوية (د.ب)">
+                <input type="number" value={form.cost} onChange={e => setForm({...form, cost: Number(e.target.value)})} className="field-input" />
+              </Field>
+              {calculatedSystemCost > 0 && (
+                <div className="text-[10px] bg-brand-orange/10 text-brand-orange px-2 py-1 rounded-md border border-brand-orange/20 mt-1">
+                   تكلفة النظام الآلية: <strong>{calculatedSystemCost.toFixed(3)} د.ب</strong>
+                </div>
+              )}
+            </div>
             <Field label="وقت التحضير (دقيقة)">
               <input type="number" value={form.prepTime} onChange={e => setForm({...form, prepTime: Number(e.target.value)})} className="field-input" />
             </Field>

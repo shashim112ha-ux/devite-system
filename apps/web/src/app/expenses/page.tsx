@@ -115,20 +115,22 @@ export default function ExpensesPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const qty = Number(quantity);
-    const price = Number(unitPrice);
-    if (isNaN(qty) || qty <= 0 || isNaN(price) || price < 0) {
-      alert("يرجى إدخال قيم صالحة للكمية وسعر الوحدة");
+    const total = Number(totalPrice);
+    if (isNaN(qty) || qty <= 0 || isNaN(total) || total < 0) {
+      alert("يرجى إدخال قيم صالحة للكمية والمبلغ الإجمالي");
       return;
     }
+    const calculatedUnitPrice = total / qty;
+    
     addExpenseMutation.mutate({
       category,
-      amount: qty * price,
+      amount: total,
       description: description || undefined,
       supplier: supplier || undefined,
       receiptUrl: receiptBase64 || undefined,
       purpose: purpose || undefined,
       quantity: qty,
-      unitPrice: price,
+      unitPrice: calculatedUnitPrice,
       paymentMethod,
       accountPaidFrom: accountsList?.find(a => a.id === accountId)?.name || accountPaidFrom,
       accountId: accountId || undefined,

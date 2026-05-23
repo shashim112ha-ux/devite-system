@@ -78,15 +78,15 @@ export default function SmartInventory() {
                {inventoryQuery.data?.map((item) => (
                  <tr key={item.id} className="hover:bg-white/[0.02] transition-colors">
                     <td className="p-6">
-                       <div className="flex items-center gap-3 relative group">
-                          <div className="w-10 h-10 bg-brand-black rounded-xl flex items-center justify-center text-brand-gold">
-                             <Package size={18} />
-                          </div>
-                          <span className="font-bold">{item.name}</span>
-                          <button onClick={() => { setEditingItem(item); setShowAddModal(true); }} className="absolute right-0 top-1/2 -translate-y-1/2 bg-white/10 p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
-                             <Edit2 size={14} className="text-brand-gold" />
-                          </button>
-                       </div>
+                         <div className="flex items-center gap-4 relative group">
+                            <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
+                               <Package size={18} />
+                            </div>
+                            <span className="font-bold">{item.name}</span>
+                            <button onClick={() => { setEditingItem(item); setShowAddModal(true); }} className="bg-white/5 hover:bg-brand-orange hover:text-white p-2 rounded-lg transition-all text-brand-gold mr-4">
+                               <Edit2 size={14} />
+                            </button>
+                         </div>
                     </td>
                     <td className="p-6 font-black text-xl">{item.quantity} <span className="text-[10px] text-gray-500">{item.unit}</span></td>
                     <td className="p-6 text-gray-500">{item.minThreshold} {item.unit}</td>
@@ -204,7 +204,7 @@ function AddInventoryModal({ onClose, onAdd, initialData }: any) {
           </div>
           <div className="flex gap-4">
             <input type="number" placeholder="السعر الكلي (د.ب)" className="w-full bg-brand-black p-4 rounded-xl border border-white/5" value={totalPrice} onChange={e => handleTotalChange(e.target.value)} />
-            <input type="number" step="0.001" placeholder="سعر الوحدة" className="w-full bg-brand-black p-4 rounded-xl border border-white/5" value={formData.unitPrice || ''} onChange={e => setFormData({...formData, unitPrice: Number(e.target.value)})} />
+            <input type="number" step="0.001" placeholder="سعر الوحدة (تلقائي)" className="w-full bg-brand-black/50 p-4 rounded-xl border border-white/5 text-brand-orange font-bold cursor-not-allowed" value={formData.unitPrice || ''} readOnly />
           </div>
           <div className="flex gap-4">
             <input type="number" placeholder="الحد الأدنى للتنبيه" className="w-full bg-brand-black p-4 rounded-xl border border-white/5" value={formData.minThreshold || ''} onChange={e => setFormData({...formData, minThreshold: Number(e.target.value)})} />

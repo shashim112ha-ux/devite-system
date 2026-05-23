@@ -183,18 +183,49 @@ function BranchesTab({ data, refetch }: any) {
 // ----------------------------------------------------
 function AccountsTab({ data, refetch }: any) {
    const [showAdd, setShowAdd] = useState(false);
-   const [formData, setFormData] = useState({ name: '', type: 'CASH', balance: '' });
+   const [editingAccount, setEditingAccount] = useState<any>(null);
+   const [formData, setFormData] = useState({ name: '', type: 'CASH', balance: '', notes: '', isActive: true });
    const createMutation = trpc.createAccount.useMutation();
+   const updateMutation = trpc.updateAccount.useMutation();
 
    const handleAdd = async () => {
       try {
          await createMutation.mutateAsync({ ...formData, balance: Number(formData.balance) });
          setShowAdd(false);
          refetch();
-         setFormData({ name: '', type: 'CASH', balance: '' });
+         setFormData({ name: '', type: 'CASH', balance: '', notes: '', isActive: true });
       } catch (e: any) {
          alert(e.message);
       }
+   };
+
+   const handleUpdate = async () => {
+      try {
+         await updateMutation.mutateAsync({ 
+            id: editingAccount.id, 
+            name: formData.name, 
+            type: formData.type, 
+            balance: Number(formData.balance),
+            notes: formData.notes || undefined,
+            isActive: formData.isActive
+         });
+         setEditingAccount(null);
+         refetch();
+         setFormData({ name: '', type: 'CASH', balance: '', notes: '', isActive: true });
+      } catch (e: any) {
+         alert(e.message);
+      }
+   };
+
+   const openEdit = (acc: any) => {
+      setEditingAccount(acc);
+      setFormData({ 
+         name: acc.name, 
+         type: acc.type, 
+         balance: acc.balance.toString(),
+         notes: acc.notes || '',
+         isActive: acc.isActive ?? true
+      });
    };
 
    return (
@@ -206,8 +237,9 @@ function AccountsTab({ data, refetch }: any) {
             </button>
          </div>
 
-         {showAdd && (
+         {showAdd && !editingAccount && (
             <div className="bg-brand-black p-6 rounded-2xl border border-white/5 mb-6 space-y-4">
+               <h3 className="font-bold">إضافة حساب جديد</h3>
                <input placeholder="اسم الحساب (مثال: كاشير 1، حساب البنك)" className="w-full bg-brand-navy p-4 rounded-xl" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
                <select className="w-full bg-brand-navy p-4 rounded-xl text-white" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
                   <option value="CASH">صندوق كاش (Cash)</option>
@@ -215,6 +247,7 @@ function AccountsTab({ data, refetch }: any) {
                   <option value="BENEFIT">بنفت (Benefit)</option>
                </select>
                <input type="number" placeholder="الرصيد الافتتاحي" className="w-full bg-brand-navy p-4 rounded-xl" value={formData.balance} onChange={e => setFormData({...formData, balance: e.target.value})} />
+               <input placeholder="ملاحظات (اختياري)" className="w-full bg-brand-navy p-4 rounded-xl" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} />
                <div className="flex gap-4">
                   <button onClick={handleAdd} className="bg-brand-orange px-6 py-3 rounded-xl font-bold text-sm flex-1">حفظ</button>
                   <button onClick={() => setShowAdd(false)} className="bg-white/10 px-6 py-3 rounded-xl font-bold text-sm flex-1">إلغاء</button>
@@ -222,21 +255,48 @@ function AccountsTab({ data, refetch }: any) {
             </div>
          )}
 
+         {editingAccount && (
+            <div className="bg-brand-black p-6 rounded-2xl border border-white/5 mb-6 space-y-4">
+               <h3 className="font-bold text-brand-orange">تعديل الحساب</h3>
+               <input placeholder="اسم الحساب" className="w-full bg-brand-navy p-4 rounded-xl" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+               <select className="w-full bg-brand-navy p-4 rounded-xl text-white" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
+                  <option value="CASH">صندوق كاش (Cash)</option>
+                  <option value="BANK">حساب بنكي (Bank)</option>
+                  <option value="BENEFIT">بنفت (Benefit)</option>
+               </select>
+               <input type="number" placeholder="الرصيد" className="w-full bg-brand-navy p-4 rounded-xl" value={formData.balance} onChange={e => setFormData({...formData, balance: e.target.value})} />
+               <input placeholder="ملاحظات (اختياري)" className="w-full bg-brand-navy p-4 rounded-xl" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} />
+               <label className="flex items-center gap-2 text-sm text-gray-300">
+                  <input type="checkbox" checked={formData.isActive} onChange={e => setFormData({...formData, isActive: e.target.checked})} />
+                  نشط
+               </label>
+               <div className="flex gap-4">
+                  <button onClick={handleUpdate} className="bg-brand-orange px-6 py-3 rounded-xl font-bold text-sm flex-1">حفظ التعديلات</button>
+                  <button onClick={() => setEditingAccount(null)} className="bg-white/10 px-6 py-3 rounded-xl font-bold text-sm flex-1">إلغاء</button>
+               </div>
+            </div>
+         )}
+
          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {data?.map((acc: any) => (
-               <div key={acc.id} className="bg-brand-black p-6 rounded-2xl border border-white/5 flex justify-between items-center">
-                  <div className="flex gap-4 items-center">
-                     <div className="w-12 h-12 rounded-xl bg-blue-500/20 text-blue-500 flex items-center justify-center shrink-0">
-                        <CreditCard size={24} />
+               <div key={acc.id} className={`bg-brand-black p-6 rounded-2xl border flex flex-col gap-4 ${!acc.isActive ? 'opacity-50 border-white/5' : 'border-white/10'}`}>
+                  <div className="flex justify-between items-start">
+                     <div className="flex gap-4 items-center">
+                        <div className="w-12 h-12 rounded-xl bg-blue-500/20 text-blue-500 flex items-center justify-center shrink-0">
+                           <CreditCard size={24} />
+                        </div>
+                        <div>
+                           <h3 className="font-bold">{acc.name}</h3>
+                           <p className="text-[10px] uppercase tracking-widest text-gray-500 mt-1">{acc.type}</p>
+                        </div>
                      </div>
-                     <div>
-                        <h3 className="font-bold">{acc.name}</h3>
-                        <p className="text-[10px] uppercase tracking-widest text-gray-500 mt-1">{acc.type}</p>
-                     </div>
+                     <button onClick={() => openEdit(acc)} className="text-gray-400 hover:text-white transition-colors p-2 bg-brand-navy rounded-lg text-xs">
+                        تعديل
+                     </button>
                   </div>
-                  <div className="text-left">
-                     <p className="text-xl font-black text-brand-gold">{acc.balance.toFixed(3)}</p>
-                     <p className="text-xs text-gray-500">د.ب</p>
+                  <div className="text-right border-t border-white/5 pt-4">
+                     <p className="text-sm text-gray-400">الرصيد الحالي</p>
+                     <p className="text-2xl font-black text-brand-gold mt-1">{acc.balance.toFixed(3)} <span className="text-xs text-gray-500 font-normal">د.ب</span></p>
                   </div>
                </div>
             ))}
