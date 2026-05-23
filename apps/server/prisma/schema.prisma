@@ -1,0 +1,534 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String   @unique
+  points    Int      @default(0)
+  createdAt DateTime @default(now())
+  orders    Order[]
+}
+
+model Offer {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  imageUrl    String?
+  price       Float
+  oldPrice    Float?
+  discount    Int?     
+  startDate   DateTime @default(now())
+  endDate     DateTime
+  type        String   @default("DISCOUNT") // DISCOUNT, COMBO, BOGO
+  active      Boolean  @default(true)
+}
+
+model User {
+  id             String   @id @default(cuid())
+  name           String
+  phone          String   @unique
+  email          String?  @unique
+  password       String
+  role           String   @default("CASHIER") // ADMIN, MANAGER, CASHIER, KITCHEN, STAFF, INVESTOR
+  jobDescription String?
+  imageUrl       String?
+  
+  salary         Float  @default(0)
+  hourlyRate     Float  @default(0)
+  shiftType      String?  
+  employmentDate DateTime @default(now())
+  active         Boolean  @default(true)
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  orders           Order[]            @relation("CashierOrders")
+  attendance       Attendance[]       @relation("UserAttendance")
+  editedAttendances Attendance[]      @relation("EditedAttendance")
+  auditLogs        AuditLog[]
+  payrolls         Payroll[]
+  feedbacks        EmployeeFeedback[]
+  recordedExpenses Expense[]
+  shiftReports     ShiftReport[]
+  shiftSchedules   ShiftSchedule[]
+  whatsappLogs     WhatsAppLog[]
+  
+  branchId         String?
+  branch           BranchLocation? @relation(fields: [branchId], references: [id])
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  products  Product[]
+  createdAt DateTime  @default(now())
+}
+
+model Product {
+  id               String   @id @default(cuid())
+  name             String
+  description      String?
+  price            Float
+  cost             Float
+  prepTime         Int      @default(5)
+  image            String?
+  available        Boolean  @default(true)
+  unavailableReason String?
+  categoryId       String
+  category         Category @relation(fields: [categoryId], references: [id])
+
+  orderItems       OrderItem[]
+  ingredients      ProductIngredient[]
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+}
+
+model InventoryItem {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  quantity     Float
+  unit         String   
+  minThreshold Float    @default(5)
+  unitPrice    Float
+  expiryDate   DateTime?
+  supplier     String?
+  category     String?  
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  productIngredients ProductIngredient[]
+  purchaseRecords    PurchaseRecord[]
+  expenses           Expense[]
+  auditLogs          InventoryAuditLog[]
+  
+  branchId         String?
+  branch           BranchLocation? @relation(fields: [branchId], references: [id])
+}
+
+model InventoryAuditLog {
+  id              String        @id @default(cuid())
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  userId          String
+  userName        String
+  oldQuantity     Float
+  newQuantity     Float
+  oldPrice        Float
+  newPrice        Float
+  reason          String?
+  createdAt       DateTime      @default(now())
+}
+
+model PurchaseRecord {
+  id              String        @id @default(cuid())
+  inventoryItemId String
+  quantity        Float
+  cost            Float
+  supplier        String?
+  date            DateTime      @default(now())
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+}
+
+model ProductIngredient {
+  id              String        @id @default(cuid())
+  productId       String
+  inventoryItemId String
+  amountRequired  Float
+  product         Product       @relation(fields: [productId], references: [id])
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+}
+
+model Order {
+  id            String        @id @default(cuid())
+  orderNumber   Int           @unique
+  total         Float
+  paymentMethod String        @default("CASH") // CASH, CARD, ONLINE
+  status        String        @default("NEW")  // NEW, PREPARING, READY, DELIVERED, CANCELLED
+  notes         String?
+  estimatedTime Int           @default(15)
+  isUrgent      Boolean       @default(false)
+  isVIP         Boolean       @default(false)
+  
+  customerId    String?
+  customer      Customer?     @relation(fields: [customerId], references: [id])
+  customerPhone String?       // رقم هاتف العميل (اختياري)
+  
+  cashierId     String?
+  cashier       User?         @relation("CashierOrders", fields: [cashierId], references: [id])
+  
+  items         OrderItem[]
+  timeline      OrderTimelineStep[]
+  whatsappStatus String?     // SENT, FAILED, PENDING
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  
+  branchId      String?
+  branch        BranchLocation? @relation(fields: [branchId], references: [id])
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  productId String
+  quantity  Int
+  price     Float
+  size      String? 
+  sugar     String? 
+  ice       String? 
+  addons    String?
+  notes     String?
+  order     Order   @relation(fields: [orderId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+model Attendance {
+  id         String    @id @default(cuid())
+  userId     String
+  checkIn    DateTime  @default(now())
+  checkOut   DateTime?
+  reason     String?   // Reason for manual edit
+  editedById String?   // Admin who manually edited
+  
+  user       User      @relation("UserAttendance", fields: [userId], references: [id])
+  editedBy   User?     @relation("EditedAttendance", fields: [editedById], references: [id])
+}
+
+model Investor {
+  id              String   @id @default(cuid())
+  name            String
+  phone           String
+  email           String?
+  capital         Float
+  sharePercentage Float
+  totalWithdrawn  Float    @default(0)
+  isActive        Boolean  @default(true)
+  notes           String?
+  entryDate       DateTime @default(now())
+  createdAt       DateTime @default(now())
+}
+
+model Expense {
+  id              String   @id @default(cuid())
+  category        String   
+  amount          Float
+  description     String?
+  date            DateTime @default(now())
+  supplier        String?
+  receiptUrl      String?
+  
+  purpose         String?
+  quantity        Float    @default(1)
+  unitPrice       Float    @default(0)
+  paymentMethod   String   @default("CASH")
+  
+  accountPaidFrom String?
+  accountId       String?  // Reference to Account model
+  account         Account? @relation(fields: [accountId], references: [id])
+  
+  inventoryItemId String?  // Reference to Inventory for automatic stock increase
+  inventoryItem   InventoryItem? @relation(fields: [inventoryItemId], references: [id])
+  
+  recordedById    String?
+  recordedBy      User?    @relation(fields: [recordedById], references: [id])
+  
+  branchId        String?
+  branch          BranchLocation? @relation(fields: [branchId], references: [id])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  type      String   
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  action    String
+  details   String?
+  createdAt DateTime @default(now())
+}
+
+model SystemSetting {
+  id              String @id @default(cuid())
+  storeName       String @default("Devite ERP")
+  currency        String @default("د.ب")
+  taxRate         Float  @default(10.0)
+  defaultPrepTime Int    @default(15)
+  logoUrl         String?
+  
+  whatsappEnabled  Boolean @default(false)
+  whatsappPhone    String?
+  whatsappOrderMsg String? @default("مرحباً بك! طلبك رقم {{orderNumber}} جاري تحضيره الآن. الإجمالي: {{total}}")
+  whatsappReadyMsg String? @default("مرحباً! طلبك رقم {{orderNumber}} جاهز للاستلام. نتمنى لك يوماً سعيداً!")
+  whatsappShiftMsg String? @default("تقرير الشفت: المبيعات {{income}}، المصروفات {{expenses}}، الصافي {{net}}.")
+}
+
+model OrderTimelineStep {
+  id              String   @id @default(cuid())
+  orderId         String
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  stage           String
+  timestamp       DateTime @default(now())
+  staffId         String?
+  durationSeconds Int      @default(0)
+}
+
+model Payroll {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id])
+  startDate        DateTime
+  endDate          DateTime
+  presenceDays     Int       @default(0)
+  absenceDays      Int       @default(0)
+  workHours        Float     @default(0)
+  overtimeHours    Float     @default(0)
+  delayHours       Float     @default(0)
+  basicSalary      Float     @default(0)
+  overtimePay      Float     @default(0)
+  bonuses          Float     @default(0)
+  deductions       Float     @default(0)
+  manualDeductions Float     @default(0) // Added for explicit manual deductions
+  advances         Float     @default(0)
+  netSalary        Float     @default(0)
+  status           String    @default("DRAFT") // DRAFT, APPROVED, PAID
+  paymentDate      DateTime?
+  notes            String?
+  approvedBy       String?
+  createdAt        DateTime  @default(now())
+}
+
+model ProfitDistribution {
+  id                  String           @id @default(cuid())
+  netProfit           Float
+  devDeduction        Float            @default(0)
+  maintDeduction      Float            @default(0)
+  emergencyDeduction  Float            @default(0)
+  stockDeduction      Float            @default(0)
+  marketingDeduction  Float            @default(0)
+  totalDeductions     Float            @default(0)
+  distributableProfit Float
+  date                DateTime         @default(now())
+  payouts             InvestorPayout[]
+}
+
+model InvestorPayout {
+  id              String             @id @default(cuid())
+  distributionId  String
+  distribution    ProfitDistribution @relation(fields: [distributionId], references: [id], onDelete: Cascade)
+  investorId      String
+  investorName    String
+  capitalShare    Float
+  sharePercentage Float
+  netProfitShare  Float
+  deductionsShare Float
+  amountPaid      Float
+  growthRate      Float              @default(0)
+  date            DateTime           @default(now())
+}
+
+model ShiftReport {
+  id                    String   @id @default(cuid())
+  date                  DateTime @default(now())
+  cashierId             String
+  cashier               User     @relation(fields: [cashierId], references: [id])
+  dailyIncome           Float    @default(0)
+  profit                Float    @default(0)
+  expenses              Float    @default(0)
+  losses                Float    @default(0)
+  netProfit             Float    @default(0)
+  operatingCost         Float    @default(0)
+  cashAmount            Float    @default(0)
+  cardAmount            Float    @default(0)
+  difference            Float    @default(0)
+  mostConsumedMaterial  String?
+  notes                 String?
+
+  status                String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  approvedBy            String?
+  managerNotes          String?
+  
+  // Checklist fields
+  cleanlinessInternal   Boolean  @default(true)
+  cleanlinessExternal   Boolean  @default(true)
+  waterInternal         Float    @default(0)
+  waterExternal         Float    @default(0)
+  petrolQuantity        Float    @default(0)
+  gasQuantity           Float    @default(0)
+  electricityStatus     Boolean  @default(true)
+  fridgeStatus          Boolean  @default(true)
+  blenderStatus         Boolean  @default(true)
+  iceMachineStatus      Boolean  @default(true)
+  cupsQuantity          Int      @default(0)
+  lidsQuantity          Int      @default(0)
+  napkinsQuantity       Int      @default(0)
+  glovesQuantity        Int      @default(0)
+  masksQuantity         Int      @default(0)
+  bagsQuantity          Int      @default(0)
+  cleaningToolsStatus   Boolean  @default(true)
+  
+  // Attendance listing
+  presentStaff          String   @default("[]") // JSON
+  absentStaff           String   @default("[]") // JSON
+  lateStaff             String   @default("[]") // JSON
+  
+  // Orders stats listing
+  ordersCount           Int      @default(0)
+  avgPrepTime           Float    @default(0)
+  fastestOrderTime      Float    @default(0)
+  slowestOrderTime      Float    @default(0)
+  delayedOrdersCount    Int      @default(0)
+  cancelledOrdersCount  Int      @default(0)
+  
+  branchId              String?
+  branch                BranchLocation? @relation(fields: [branchId], references: [id])
+}
+
+model EmployeeFeedback {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  type        String   // positive, negative, issue, suggestion, customer_note, kitchen_note, tool_note
+  message     String
+  status      String   @default("NEW") // NEW, VIEWED, RESOLVED
+  adminReply  String?
+  createdAt   DateTime @default(now())
+}
+
+model Account {
+  id          String    @id @default(cuid())
+  name        String
+  type        String    @default("CASH") // CASH, ONLINE, CARD, BENEFIT, BANK
+  balance     Float     @default(0)
+  notes       String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  expenses    Expense[]
+  
+  branchId    String?
+  branch      BranchLocation? @relation(fields: [branchId], references: [id])
+}
+
+model BranchLocation {
+  id            String    @id @default(cuid())
+  country       String    @default("مملكة البحرين")
+  governorate   String?
+  branchName    String
+  address       String?
+  googleMapsUrl String?
+  branchNumber  String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  users         User[]
+  orders        Order[]
+  expenses      Expense[]
+  inventory     InventoryItem[]
+  shiftReports  ShiftReport[]
+  accounts      Account[]
+}
+
+// نموذج الملاحظات العام - للزبائن والمستثمرين والموظفين بدون تسجيل دخول
+model Feedback {
+  id          String   @id @default(cuid())
+  senderName  String?
+  senderPhone String?
+  senderRole  String   @default("CUSTOMER") // CUSTOMER, INVESTOR, EMPLOYEE, ANONYMOUS
+  type        String   // شكوى، مقترح، تطوير، إطراء، استفسار
+  content     String
+  isRead      Boolean  @default(false)
+  adminReply  String?
+  createdAt   DateTime @default(now())
+}
+
+model ShiftSchedule {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  date        DateTime // تاريخ المناوبة
+  shiftName   String   // اسم المناوبة (أولى، ثانية، الخ)
+  startTime   DateTime
+  endTime     DateTime
+  role        String   // كاشير / مطبخ / محاسب / مدير / توصيل
+  status      String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  createdBy   String?  // من قام بإنشاء أو طلب المناوبة
+  notes       String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// =====================================
+// نظام الواتساب المتكامل
+// =====================================
+
+model WhatsAppSettings {
+  id                        String  @id @default("default")
+  isEnabled                 Boolean @default(false)
+  officialNumber            String?
+  accessToken               String?
+  phoneNumberId             String?
+  managerNumbers            String? // أرقام المدراء مفصولة بفاصلة
+  supervisorNumbers         String? // أرقام المشرفين
+  investorNumbers           String? // أرقام المستثمرين
+  headManagerNumber         String? // رقم المدير الرئيسي
+
+  // مفاتيح تفعيل كل نوع رسالة
+  notifyOrderCreated        Boolean @default(true)
+  notifyOrderReady          Boolean @default(true)
+  notifyOrderCancelled      Boolean @default(true)
+  notifyShiftReport         Boolean @default(true)
+  notifyDailyReport         Boolean @default(false)
+  notifyLowInventory        Boolean @default(true)
+  notifyLargeExpense        Boolean @default(true)
+  notifyInvestorReport      Boolean @default(false)
+
+  // إعدادات التنبيهات
+  largeExpenseThreshold     Float   @default(20.0)
+  lowInventoryRepeatDaily   Boolean @default(false) // تكرار تنبيه المخزون يومياً
+
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+}
+
+model WhatsAppTemplate {
+  id        String   @id @default(cuid())
+  type      String   @unique // ORDER_CREATED, ORDER_READY, ORDER_CANCELLED, SHIFT_REPORT, DAILY_REPORT, LOW_INVENTORY, LARGE_EXPENSE, INVESTOR_REPORT
+  name      String
+  body      String
+  variables String   // المتغيرات المتاحة مثل {customerName},{orderNumber}
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model WhatsAppLog {
+  id           String    @id @default(cuid())
+  recipient    String    // رقم المستلم
+  messageType  String    // ORDER_CREATED, SHIFT_REPORT, الخ
+  body         String    // نص الرسالة المرسلة
+  status       String    @default("PENDING") // PENDING, SENT, FAILED
+  errorMessage String?
+  attempts     Int       @default(0)
+  sentAt       DateTime?
+  createdAt    DateTime  @default(now())
+
+  userId       String?
+  user         User?     @relation(fields: [userId], references: [id])
+}

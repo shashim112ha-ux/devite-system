@@ -1,0 +1,358 @@
+"use client";
+
+import { useState } from "react";
+import { trpc } from "../utils/trpc";
+import { 
+  Settings2, Building2, Wallet, Database, ShieldAlert,
+  Save, Plus, MapPin, Building, CreditCard, RefreshCw, MessageCircle
+} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+
+export default function SettingsPage() {
+  const [activeTab, setActiveTab] = useState<"general" | "branches" | "accounts" | "whatsapp" | "backup" | "logs">("general");
+
+  const settingsQuery = trpc.getSystemSettings.useQuery();
+  const branchesQuery = trpc.getBranchLocations.useQuery();
+  const accountsQuery = trpc.getAccounts.useQuery();
+  const logsQuery = trpc.getAuditLogs.useQuery(undefined, { enabled: activeTab === 'logs' });
+
+  return (
+    <div className="min-h-screen bg-brand-black p-10">
+      <header className="mb-12 flex justify-between items-end">
+         <div>
+            <h1 className="text-4xl font-black text-white flex items-center gap-3">
+               <Settings2 size={36} className="text-brand-orange" /> الإعدادات الشاملة
+            </h1>
+            <p className="text-gray-400 mt-2">إدارة الفروع، الحسابات المالية، إعدادات النظام، والنسخ الاحتياطي</p>
+         </div>
+      </header>
+
+      <div className="flex gap-8">
+         {/* Sidebar Tabs */}
+         <div className="w-1/4">
+            <div className="bg-brand-navy border border-white/5 rounded-[30px] p-4 flex flex-col gap-2">
+               <TabButton active={activeTab === 'general'} onClick={() => setActiveTab('general')} icon={<Settings2 size={20}/>} label="إعدادات النظام" />
+               <TabButton active={activeTab === 'branches'} onClick={() => setActiveTab('branches')} icon={<Building2 size={20}/>} label="إدارة الفروع" />
+               <TabButton active={activeTab === 'accounts'} onClick={() => setActiveTab('accounts')} icon={<Wallet size={20}/>} label="الحسابات والصناديق" />
+               <TabButton active={activeTab === 'whatsapp'} onClick={() => setActiveTab('whatsapp')} icon={<MessageCircle size={20}/>} label="مركز الواتساب" />
+               <TabButton active={activeTab === 'backup'} onClick={() => setActiveTab('backup')} icon={<Database size={20}/>} label="النسخ الاحتياطي" />
+               <TabButton active={activeTab === 'logs'} onClick={() => setActiveTab('logs')} icon={<ShieldAlert size={20}/>} label="سجل النظام العام" />
+            </div>
+         </div>
+
+         {/* Content Area */}
+         <div className="w-3/4">
+            {activeTab === 'general' && <GeneralSettingsTab data={settingsQuery.data} refetch={settingsQuery.refetch} />}
+            {activeTab === 'branches' && <BranchesTab data={branchesQuery.data} refetch={branchesQuery.refetch} />}
+            {activeTab === 'accounts' && <AccountsTab data={accountsQuery.data} refetch={accountsQuery.refetch} />}
+            {activeTab === 'whatsapp' && <WhatsAppTab data={settingsQuery.data} refetch={settingsQuery.refetch} />}
+            {activeTab === 'backup' && <BackupTab />}
+            {activeTab === 'logs' && <LogsTab data={logsQuery.data} />}
+         </div>
+      </div>
+    </div>
+  );
+}
+
+function TabButton({ active, onClick, icon, label }: any) {
+   return (
+      <button 
+         onClick={onClick} 
+         className={`flex items-center gap-3 w-full p-4 rounded-2xl transition-all font-bold ${active ? 'bg-brand-orange text-white' : 'hover:bg-white/5 text-gray-400'}`}
+      >
+         {icon} {label}
+      </button>
+   );
+}
+
+// ----------------------------------------------------
+// General Settings
+// ----------------------------------------------------
+function GeneralSettingsTab({ data, refetch }: any) {
+   const updateMutation = trpc.updateSystemSettings.useMutation();
+   const [formData, setFormData] = useState(data || {
+      storeName: 'Devite ERP',
+      currency: 'د.ب',
+      taxRate: 10,
+      defaultPrepTime: 15
+   });
+
+   const handleSave = async () => {
+      try {
+         await updateMutation.mutateAsync({
+            storeName: formData.storeName,
+            currency: formData.currency,
+            taxRate: Number(formData.taxRate),
+            defaultPrepTime: Number(formData.defaultPrepTime)
+         });
+         alert("تم حفظ الإعدادات بنجاح");
+         refetch();
+      } catch (e: any) {
+         alert("خطأ: " + e.message);
+      }
+   };
+
+   return (
+      <div className="bg-brand-navy border border-white/5 rounded-[30px] p-8">
+         <h2 className="text-2xl font-black mb-6">الإعدادات العامة</h2>
+         <div className="grid grid-cols-2 gap-6">
+            <div>
+               <label className="block text-gray-400 text-sm mb-2">اسم المتجر / المطعم</label>
+               <input value={formData.storeName || ''} onChange={e => setFormData({...formData, storeName: e.target.value})} className="w-full bg-brand-black p-4 rounded-xl border border-white/5" />
+            </div>
+            <div>
+               <label className="block text-gray-400 text-sm mb-2">العملة الافتراضية</label>
+               <input value={formData.currency || ''} onChange={e => setFormData({...formData, currency: e.target.value})} className="w-full bg-brand-black p-4 rounded-xl border border-white/5" />
+            </div>
+            <div>
+               <label className="block text-gray-400 text-sm mb-2">نسبة الضريبة (VAT %)</label>
+               <input type="number" value={formData.taxRate || ''} onChange={e => setFormData({...formData, taxRate: e.target.value})} className="w-full bg-brand-black p-4 rounded-xl border border-white/5" />
+            </div>
+            <div>
+               <label className="block text-gray-400 text-sm mb-2">وقت التحضير الافتراضي (دقائق)</label>
+               <input type="number" value={formData.defaultPrepTime || ''} onChange={e => setFormData({...formData, defaultPrepTime: e.target.value})} className="w-full bg-brand-black p-4 rounded-xl border border-white/5" />
+            </div>
+         </div>
+         <button onClick={handleSave} className="mt-8 bg-brand-orange px-8 py-4 rounded-xl font-bold flex items-center gap-2">
+            <Save size={20} /> حفظ التعديلات
+         </button>
+      </div>
+   );
+}
+
+// ----------------------------------------------------
+// Branches Tab
+// ----------------------------------------------------
+function BranchesTab({ data, refetch }: any) {
+   const [showAdd, setShowAdd] = useState(false);
+   const [formData, setFormData] = useState({ branchName: '', address: '', branchNumber: '' });
+   const createMutation = trpc.createBranchLocation.useMutation();
+
+   const handleAdd = async () => {
+      try {
+         await createMutation.mutateAsync({ ...formData, country: 'مملكة البحرين' });
+         setShowAdd(false);
+         refetch();
+         setFormData({ branchName: '', address: '', branchNumber: '' });
+      } catch (e: any) {
+         alert(e.message);
+      }
+   };
+
+   return (
+      <div className="bg-brand-navy border border-white/5 rounded-[30px] p-8">
+         <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-black">إدارة الفروع</h2>
+            <button onClick={() => setShowAdd(true)} className="bg-brand-orange px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2">
+               <Plus size={16} /> إضافة فرع
+            </button>
+         </div>
+
+         {showAdd && (
+            <div className="bg-brand-black p-6 rounded-2xl border border-white/5 mb-6 space-y-4">
+               <input placeholder="اسم الفرع (مثال: فرع السيف)" className="w-full bg-brand-navy p-4 rounded-xl" value={formData.branchName} onChange={e => setFormData({...formData, branchName: e.target.value})} />
+               <input placeholder="العنوان بالتفصيل" className="w-full bg-brand-navy p-4 rounded-xl" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
+               <input placeholder="رقم هاتف الفرع" className="w-full bg-brand-navy p-4 rounded-xl" value={formData.branchNumber} onChange={e => setFormData({...formData, branchNumber: e.target.value})} />
+               <div className="flex gap-4">
+                  <button onClick={handleAdd} className="bg-brand-orange px-6 py-3 rounded-xl font-bold text-sm flex-1">حفظ</button>
+                  <button onClick={() => setShowAdd(false)} className="bg-white/10 px-6 py-3 rounded-xl font-bold text-sm flex-1">إلغاء</button>
+               </div>
+            </div>
+         )}
+
+         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {data?.map((branch: any) => (
+               <div key={branch.id} className="bg-brand-black p-6 rounded-2xl border border-white/5 flex gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-brand-orange/20 text-brand-orange flex items-center justify-center shrink-0">
+                     <Building size={24} />
+                  </div>
+                  <div>
+                     <h3 className="font-bold text-lg">{branch.branchName}</h3>
+                     <p className="text-sm text-gray-400 mt-1 flex items-center gap-1"><MapPin size={12}/> {branch.address || 'لا يوجد عنوان'}</p>
+                     <p className="text-sm text-gray-500 mt-1">{branch.branchNumber}</p>
+                  </div>
+               </div>
+            ))}
+         </div>
+      </div>
+   );
+}
+
+// ----------------------------------------------------
+// Accounts Tab
+// ----------------------------------------------------
+function AccountsTab({ data, refetch }: any) {
+   const [showAdd, setShowAdd] = useState(false);
+   const [formData, setFormData] = useState({ name: '', type: 'CASH', balance: '' });
+   const createMutation = trpc.createAccount.useMutation();
+
+   const handleAdd = async () => {
+      try {
+         await createMutation.mutateAsync({ ...formData, balance: Number(formData.balance) });
+         setShowAdd(false);
+         refetch();
+         setFormData({ name: '', type: 'CASH', balance: '' });
+      } catch (e: any) {
+         alert(e.message);
+      }
+   };
+
+   return (
+      <div className="bg-brand-navy border border-white/5 rounded-[30px] p-8">
+         <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-black">الحسابات والصناديق</h2>
+            <button onClick={() => setShowAdd(true)} className="bg-brand-orange px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2">
+               <Plus size={16} /> إضافة حساب
+            </button>
+         </div>
+
+         {showAdd && (
+            <div className="bg-brand-black p-6 rounded-2xl border border-white/5 mb-6 space-y-4">
+               <input placeholder="اسم الحساب (مثال: كاشير 1، حساب البنك)" className="w-full bg-brand-navy p-4 rounded-xl" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+               <select className="w-full bg-brand-navy p-4 rounded-xl text-white" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
+                  <option value="CASH">صندوق كاش (Cash)</option>
+                  <option value="BANK">حساب بنكي (Bank)</option>
+                  <option value="BENEFIT">بنفت (Benefit)</option>
+               </select>
+               <input type="number" placeholder="الرصيد الافتتاحي" className="w-full bg-brand-navy p-4 rounded-xl" value={formData.balance} onChange={e => setFormData({...formData, balance: e.target.value})} />
+               <div className="flex gap-4">
+                  <button onClick={handleAdd} className="bg-brand-orange px-6 py-3 rounded-xl font-bold text-sm flex-1">حفظ</button>
+                  <button onClick={() => setShowAdd(false)} className="bg-white/10 px-6 py-3 rounded-xl font-bold text-sm flex-1">إلغاء</button>
+               </div>
+            </div>
+         )}
+
+         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {data?.map((acc: any) => (
+               <div key={acc.id} className="bg-brand-black p-6 rounded-2xl border border-white/5 flex justify-between items-center">
+                  <div className="flex gap-4 items-center">
+                     <div className="w-12 h-12 rounded-xl bg-blue-500/20 text-blue-500 flex items-center justify-center shrink-0">
+                        <CreditCard size={24} />
+                     </div>
+                     <div>
+                        <h3 className="font-bold">{acc.name}</h3>
+                        <p className="text-[10px] uppercase tracking-widest text-gray-500 mt-1">{acc.type}</p>
+                     </div>
+                  </div>
+                  <div className="text-left">
+                     <p className="text-xl font-black text-brand-gold">{acc.balance.toFixed(3)}</p>
+                     <p className="text-xs text-gray-500">د.ب</p>
+                  </div>
+               </div>
+            ))}
+         </div>
+      </div>
+   );
+}
+
+// ----------------------------------------------------
+// Backup Tab
+// ----------------------------------------------------
+function BackupTab() {
+   const backupMutation = trpc.triggerDatabaseBackup.useMutation();
+
+   const handleBackup = async () => {
+      try {
+         const res = await backupMutation.mutateAsync();
+         alert("تم أخذ نسخة احتياطية بنجاح باسم:\n" + res.fileName + "\n(محفوظة في مجلد السيرفر)");
+      } catch (e: any) {
+         alert("خطأ: " + e.message);
+      }
+   };
+
+   return (
+      <div className="bg-brand-navy border border-white/5 rounded-[30px] p-8 text-center">
+         <div className="w-24 h-24 bg-brand-orange/20 text-brand-orange rounded-full flex items-center justify-center mx-auto mb-6">
+            <Database size={48} />
+         </div>
+         <h2 className="text-3xl font-black mb-4">النسخ الاحتياطي لقاعدة البيانات</h2>
+         <p className="text-gray-400 mb-8 max-w-md mx-auto">
+            بإمكانك أخذ نسخة احتياطية فورية من قاعدة البيانات الحالية لضمان عدم ضياع بيانات المطعم في حال حدوث أي طارئ.
+         </p>
+         <button onClick={handleBackup} disabled={backupMutation.isLoading} className="bg-brand-orange px-8 py-4 rounded-xl font-bold text-lg inline-flex items-center gap-3">
+            <RefreshCw size={24} className={backupMutation.isLoading ? 'animate-spin' : ''} />
+            {backupMutation.isLoading ? 'جاري النسخ...' : 'إنشاء نسخة احتياطية الآن'}
+         </button>
+      </div>
+   );
+}
+
+// ----------------------------------------------------
+// Logs Tab
+// ----------------------------------------------------
+function LogsTab({ data }: any) {
+   return (
+      <div className="bg-brand-navy border border-white/5 rounded-[30px] overflow-hidden">
+         <div className="p-8 border-b border-white/5">
+            <h2 className="text-2xl font-black">سجل النظام العام (Audit Logs)</h2>
+            <p className="text-sm text-gray-400 mt-1">تتبع كافة الإجراءات الحساسة في النظام</p>
+         </div>
+         <table className="w-full text-right">
+            <thead className="bg-white/5 text-gray-500 text-xs uppercase tracking-widest">
+               <tr>
+                  <th className="p-4 pl-0">التاريخ</th>
+                  <th className="p-4">الموظف</th>
+                  <th className="p-4">العملية</th>
+                  <th className="p-4">التفاصيل</th>
+               </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5 text-sm">
+               {data?.map((log: any) => (
+                  <tr key={log.id} className="hover:bg-white/[0.02]">
+                     <td className="p-4 pl-0 text-gray-400">{new Date(log.createdAt).toLocaleString('ar-SA')}</td>
+                     <td className="p-4 font-bold text-white">
+                        {log.user?.name} 
+                        <span className="block text-[10px] text-brand-orange uppercase font-normal">{log.user?.role}</span>
+                     </td>
+                     <td className="p-4 text-brand-gold font-bold">{log.action}</td>
+                     <td className="p-4 text-gray-300">{log.details}</td>
+                  </tr>
+               ))}
+               {data?.length === 0 && (
+                  <tr><td colSpan={4} className="p-8 text-center text-gray-500">لا توجد سجلات بعد</td></tr>
+               )}
+            </tbody>
+         </table>
+      </div>
+   );
+}
+
+// ----------------------------------------------------
+// WhatsApp Settings Tab
+// ----------------------------------------------------
+function WhatsAppTab({ data, refetch }: any) {
+   return (
+      <div className="bg-brand-navy border border-white/5 rounded-[30px] p-8 space-y-6">
+         <div>
+            <h2 className="text-2xl font-black mb-2 flex items-center gap-2 text-green-500">
+               <MessageCircle size={28} /> مركز الواتساب المتكامل
+            </h2>
+            <p className="text-gray-400 text-sm">نظام رسائل واتساب احترافي متكامل - إعدادات، قوالب، وسجلات.</p>
+         </div>
+         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[
+               { href: "/settings/whatsapp", icon: "⚙️", label: "إعدادات الواتساب", desc: "الأرقام، التوكن، تفعيل الإشعارات، اختبار الإرسال", color: "border-green-500/30 hover:border-green-500" },
+               { href: "/settings/whatsapp-templates", icon: "📝", label: "قوالب الرسائل", desc: "تعديل نصوص كل نوع رسالة مع المتغيرات الديناميكية", color: "border-brand-orange/30 hover:border-brand-orange" },
+               { href: "/settings/whatsapp-logs", icon: "📋", label: "سجل الرسائل", desc: "عرض حالة جميع الرسائل المرسلة والمعلقة والفاشلة", color: "border-purple-500/30 hover:border-purple-500" },
+            ].map(card => (
+               <a key={card.href} href={card.href} className={`block bg-brand-black/50 border ${card.color} rounded-3xl p-6 transition-all hover:bg-brand-black group`}>
+                  <div className="text-4xl mb-3">{card.icon}</div>
+                  <h3 className="font-black text-white text-lg mb-1">{card.label}</h3>
+                  <p className="text-xs text-gray-400">{card.desc}</p>
+                  <div className="mt-4 text-brand-orange text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity">فتح الصفحة ←</div>
+               </a>
+            ))}
+         </div>
+         <div className="bg-brand-black/40 rounded-2xl p-5 border border-white/5">
+            <h3 className="font-bold text-white mb-4">خطوات الربط بـ Meta API</h3>
+            <ol className="space-y-2 text-sm text-gray-400 list-decimal list-inside">
+               <li>أنشئ حساب على <strong className="text-white">Meta Developer Console</strong></li>
+               <li>أضف تطبيق واتساب وأنشئ <strong className="text-white">WhatsApp Business Account</strong></li>
+               <li>احصل على <strong className="text-white">Access Token</strong> و <strong className="text-white">Phone Number ID</strong></li>
+               <li>أدخل البيانات في <a href="/settings/whatsapp" className="text-brand-orange underline">إعدادات الواتساب</a></li>
+               <li>جرب الإرسال عبر زر <strong className="text-white">اختبار الإرسال</strong></li>
+            </ol>
+         </div>
+      </div>
+   );
+}
