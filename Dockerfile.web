@@ -11,6 +11,10 @@ COPY . .
 # Install dependencies
 RUN npm install
 
+# Pass Railway variables to build time
+ARG NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
 # Build the frontend web app
 # Next.js will automatically build into apps/web/.next
 RUN npm run build --workspace=apps/web
