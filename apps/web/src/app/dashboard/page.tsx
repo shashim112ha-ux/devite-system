@@ -35,7 +35,8 @@ export default function AdminDashboard() {
 
   // WebSocket Live alerts listener
   useEffect(() => {
-    const socket = io(typeof window !== "undefined" ? `http://${window.location.hostname}:4000` : "http://127.0.0.1:4000");
+    const socketUrl = process.env.NEXT_PUBLIC_API_URL ? process.env.NEXT_PUBLIC_API_URL.replace('/trpc', '') : (typeof window !== "undefined" ? `http://${window.location.hostname}:4000` : "http://127.0.0.1:4000");
+    const socket = io(socketUrl);
 
     socket.on("low_stock_warning", (data) => {
       setNotifications(prev => [

@@ -91,7 +91,7 @@ export default function ExpensesPage() {
       
       // Upload via backend /upload REST API
       try {
-        const uploadUrl = typeof window !== "undefined" ? `/api/upload` : "http://127.0.0.1:4000/upload";
+        const uploadUrl = process.env.NEXT_PUBLIC_API_URL ? process.env.NEXT_PUBLIC_API_URL.replace('/trpc', '/upload') : (typeof window !== "undefined" ? `/api/upload` : "http://127.0.0.1:4000/upload");
         const response = await fetch(uploadUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
