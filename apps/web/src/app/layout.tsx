@@ -126,9 +126,10 @@ function RoleGuard({ children, pathname }: { children: React.ReactNode, pathname
           md:relative md:translate-x-0
           ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full'}
         `}>
-          <div className="p-8 text-center border-b border-white/5">
+          <div className="p-8 text-center border-b border-white/5 flex flex-col items-center gap-2">
+            <img src="/logo.png" alt="Devite Logo" className="w-16 h-16 rounded-full shadow-lg" />
             <h2 className="text-2xl font-black text-brand-orange">DEVITE</h2>
-            <p className="text-[10px] text-gray-500 uppercase tracking-widest mt-1">{role} Portal</p>
+            <p className="text-[10px] text-brand-gold uppercase tracking-widest">{role} Portal</p>
           </div>
           
           <nav className="flex-1 p-4 space-y-2 overflow-y-auto" onClick={() => setIsSidebarOpen(false)}>

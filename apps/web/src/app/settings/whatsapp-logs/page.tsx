@@ -126,15 +126,25 @@ export default function WhatsAppLogsPage() {
                         {(log as any).user?.name || "النظام"}
                       </td>
                       <td className="p-4 text-center">
-                        {log.status === 'FAILED' && (
-                          <button
-                            onClick={() => retryMutation.mutate({ id: log.id })}
-                            disabled={retryMutation.isLoading}
-                            className="bg-brand-orange/10 hover:bg-brand-orange text-brand-orange hover:text-black text-xs font-bold px-3 py-1.5 rounded-xl transition-colors"
-                          >
-                            إعادة
-                          </button>
-                        )}
+                        {log.status === 'FAILED' || log.status === 'PENDING' ? (
+                          <div className="flex justify-center gap-2">
+                            <button
+                              onClick={() => retryMutation.mutate({ id: log.id })}
+                              disabled={retryMutation.isLoading}
+                              className="bg-brand-orange/10 hover:bg-brand-orange text-brand-orange hover:text-black text-xs font-bold px-3 py-1.5 rounded-xl transition-colors"
+                            >
+                              إعادة
+                            </button>
+                            <a
+                              href={`https://wa.me/${log.recipient.replace('+', '')}?text=${encodeURIComponent((log as any).body || '')}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="bg-green-500/10 hover:bg-green-500 text-green-500 hover:text-white text-xs font-bold px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1"
+                            >
+                              إرسال يدوي
+                            </a>
+                          </div>
+                        ) : null}
                       </td>
                     </tr>
                   );

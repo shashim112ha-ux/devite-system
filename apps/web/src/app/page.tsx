@@ -102,9 +102,12 @@ export default function CustomerHome() {
     <div className="min-h-screen bg-brand-black text-white pb-24">
       {/* Header & Logo */}
       <header className="p-8 flex justify-between items-center bg-gradient-to-b from-brand-navy-light/30 to-transparent">
-        <div>
-          <h1 className="text-3xl font-black text-brand-orange tracking-tighter">DEVITE</h1>
-          <p className="text-[8px] tracking-[0.4em] text-brand-gold uppercase font-bold">Luxury Cart System</p>
+        <div className="flex items-center gap-3">
+          <img src="/logo.png" alt="Devite Logo" className="w-12 h-12 rounded-full shadow-lg shadow-black/50" />
+          <div>
+            <h1 className="text-3xl font-black text-brand-orange tracking-tighter">DEVITE</h1>
+            <p className="text-[8px] tracking-[0.4em] text-brand-gold uppercase font-bold mt-1">Luxury Cart System</p>
+          </div>
         </div>
         <div className="flex gap-4">
            <button onClick={() => setShowPoints(true)} className="bg-brand-navy p-3 rounded-2xl border border-white/5 relative">

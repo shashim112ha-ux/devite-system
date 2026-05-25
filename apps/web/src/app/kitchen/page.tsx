@@ -84,8 +84,13 @@ export default function ProfessionalKitchen() {
     if (nextStatus === 'READY' && order.customer?.phone && settingsQuery.data?.whatsappEnabled) {
       const phone = order.customer.phone;
       const formattedPhone = phone.startsWith('+') ? phone.substring(1) : (phone.startsWith('00') ? phone.substring(2) : `973${phone}`);
-      let msg = settingsQuery.data?.whatsappReadyMsg || `مرحباً ${order.customer.name || 'عميلنا العزيز'}،\n\nنود إعلامك أن طلبك رقم #${order.id.slice(-4)} جاهز الآن للاستلام! 🎉\n\nبانتظارك ☕️`;
+      let msg = settingsQuery.data?.whatsappReadyMsg || `مرحباً ${order.customer.name || 'عميلنا العزيز'}،\n\nلقد تم تجهيز طلبك رقم #${order.id.slice(-4)} وهو جاهز للاستلام! 🎉\n\nبالعافية 💛`;
       msg = msg.replace('{{orderNumber}}', `#${order.id.slice(-4)}`);
+      
+      // Append Rating Message
+      const points = order.total ? Math.floor(order.total) : 0;
+      msg += `\n\n---\n*نطمح دائماً للأفضل، شاركنا تقييمك:*\n1- أخبرنا عن رضاك عن المنتج (1-5)\n2- أخبرنا عن مستوى رضاك عن الموظف (1-5)\n\n🎁 مجموع نقاطك المكتسبة من هذا الطلب: ${points} نقطة!`;
+      
       const url = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(msg)}`;
       window.open(url, '_blank');
     }

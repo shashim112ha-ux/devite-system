@@ -3,11 +3,11 @@
 @tailwind utilities;
 
 :root {
-  --brand-black: #000000;
-  --brand-navy: #0a192f;
-  --brand-navy-light: #172a45;
-  --brand-orange: #ff8c00;
-  --brand-gold: #d4af37;
+  --brand-black: #0d1712;
+  --brand-navy: #254d3b;
+  --brand-navy-light: #366650;
+  --brand-orange: #d0af75;
+  --brand-gold: #e5c48b;
 }
 
 body {
