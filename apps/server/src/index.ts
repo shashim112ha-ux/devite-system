@@ -11,6 +11,11 @@ import path from 'path';
 
 dotenv.config();
 
+// Prevent unhandled promise rejections from crashing the server (crucial for Puppeteer/WhatsApp)
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
 const app = express();
 app.use(cors());
 

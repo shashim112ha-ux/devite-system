@@ -41,7 +41,10 @@ export function initWhatsAppClient() {
     setTimeout(initWhatsAppClient, 5000);
   });
 
-  whatsappClient.initialize();
+  whatsappClient.initialize().catch(err => {
+    console.error('[WhatsApp] Failed to initialize:', err.message);
+    whatsappStatus = 'DISCONNECTED';
+  });
 }
 
 // Call this once on server startup
