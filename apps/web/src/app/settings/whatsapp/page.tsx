@@ -120,7 +120,7 @@ export default function WhatsAppSettingsPage() {
               </div>
               <div>
                  <h3 className="font-bold text-brand-orange text-lg">امسح الكود لربط النظام بالواتساب</h3>
-                 <p className="text-sm text-gray-400 mt-2">افتح تطبيق الواتساب في هاتفك > الإعدادات > الأجهزة المرتبطة > ربط جهاز، ثم وجه الكاميرا نحو هذا الرمز.</p>
+                 <p className="text-sm text-gray-400 mt-2">افتح تطبيق الواتساب في هاتفك &gt; الإعدادات &gt; الأجهزة المرتبطة &gt; ربط جهاز، ثم وجه الكاميرا نحو هذا الرمز.</p>
               </div>
            </div>
         )}
