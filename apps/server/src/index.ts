@@ -38,7 +38,7 @@ app.post('/upload', (req: any, res: any) => {
     }
     
     fs.writeFileSync(path.join(uploadDir, filename), base64Data, 'base64');
-    return res.json({ url: `http://127.0.0.1:4000/uploads/${filename}` });
+    return res.json({ url: `${req.protocol}://${req.get('host')}/uploads/${filename}` });
   } catch (error: any) {
     return res.status(500).json({ error: error.message });
   }
@@ -70,8 +70,8 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 4000;
 
-server.listen(Number(PORT), () => {
-  console.log(`🚀 DEVITE Server running on http://127.0.0.1:${PORT}/trpc`);
+server.listen(Number(PORT), "0.0.0.0", () => {
+  console.log(`🚀 DEVITE Server running on http://0.0.0.0:${PORT}/trpc`);
   console.log(`🔌 Socket.io ready on ws://127.0.0.1:${PORT}`);
 });
 
