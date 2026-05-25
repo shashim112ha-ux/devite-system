@@ -43,12 +43,8 @@ RUN npm install
 # Build the server app
 RUN npm run build --workspace=apps/server
 
-# Expose the server port
-EXPOSE 4000
-
 # Set production environment
 ENV NODE_ENV=production
-ENV PORT=4000
 
 # Start the server (matches your package.json script)
 CMD ["npm", "run", "start:server"]
