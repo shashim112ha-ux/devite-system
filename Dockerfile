@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y \
     libxcb1 \
     libxkbcommon0 \
     libx11-6 \
-    libcomposite1 \
+    libxcomposite1 \
     libxdamage1 \
     libxext6 \
     libxfixes3 \
