@@ -4,7 +4,8 @@ async function proxyRequest(req: NextRequest) {
   const url = new URL(req.url);
   // Extract the path after /api/trpc
   const path = url.pathname.replace('/api/trpc', '/trpc');
-  const backendUrl = `http://127.0.0.1:4000${path}${url.search}`;
+  const baseUrl = process.env['NEXT_PUBLIC_API_URL'] ? process.env['NEXT_PUBLIC_API_URL'].replace('/trpc', '') : 'http://127.0.0.1:4000';
+  const backendUrl = `${baseUrl}${path}${url.search}`;
 
   const headers = new Headers(req.headers);
   headers.delete('host'); // Let fetch set the host

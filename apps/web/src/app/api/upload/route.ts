@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(req: NextRequest) {
-  const backendUrl = `http://127.0.0.1:4000/upload`;
+  const baseUrl = process.env['NEXT_PUBLIC_API_URL'] ? process.env['NEXT_PUBLIC_API_URL'].replace('/trpc', '') : 'http://127.0.0.1:4000';
+  const backendUrl = `${baseUrl}/upload`;
   const body = await req.text();
   const headers = new Headers(req.headers);
   headers.delete('host');
