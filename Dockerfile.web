@@ -1,0 +1,25 @@
+FROM node:20-slim
+
+WORKDIR /app
+
+# Copy root package files
+COPY package.json package-lock.json ./
+
+# Copy the entire workspace
+COPY . .
+
+# Install dependencies
+RUN npm install
+
+# Build the frontend web app
+# Next.js will automatically build into apps/web/.next
+RUN npm run build --workspace=apps/web
+
+# Expose port (Railway will provide the PORT env var)
+EXPOSE 3000
+
+# Set production environment
+ENV NODE_ENV=production
+
+# Start the frontend app
+CMD ["npm", "run", "start:web"]
