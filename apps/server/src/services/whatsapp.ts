@@ -16,7 +16,7 @@ export function initWhatsAppClient() {
 
   whatsappClient = new Client({
     authStrategy: new LocalAuth({ clientId: 'devite-erp' }),
-    puppeteer: { args: ['--no-sandbox', '--disable-setuid-sandbox'] }
+    puppeteer: { args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] }
   });
 
   whatsappClient.on('qr', async (qr) => {
