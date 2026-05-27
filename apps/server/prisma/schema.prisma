@@ -85,6 +85,10 @@ model Product {
   categoryId       String
   category         Category @relation(fields: [categoryId], references: [id])
 
+  sizes            String[] @default([])
+  sugarLevels      String[] @default([])
+  iceLevels        String[] @default([])
+
   orderItems       OrderItem[]
   ingredients      ProductIngredient[]
   createdAt        DateTime            @default(now())
@@ -274,6 +278,8 @@ model SystemSetting {
   whatsappOrderMsg String? @default("مرحباً بك! طلبك رقم {{orderNumber}} جاري تحضيره الآن. الإجمالي: {{total}}")
   whatsappReadyMsg String? @default("مرحباً! طلبك رقم {{orderNumber}} جاهز للاستلام. نتمنى لك يوماً سعيداً!")
   whatsappShiftMsg String? @default("تقرير الشفت: المبيعات {{income}}، المصروفات {{expenses}}، الصافي {{net}}.")
+  
+  clockOutInstructions String? @default("حافظ على نظافة العربة\nادخل جميع الاجهزة من الخارج\nتأكد من اغلاق جميع الليتات الخارجية")
 }
 
 model OrderTimelineStep {

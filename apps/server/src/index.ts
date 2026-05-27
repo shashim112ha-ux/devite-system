@@ -33,8 +33,9 @@ app.post('/upload', (req: any, res: any) => {
     return res.status(400).json({ error: 'No image provided' });
   }
   try {
-    const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
-    const extension = image.match(/^data:image\/(\w+);base64,/)?. [1] || 'png';
+    const base64Data = image.replace(/^data:(.*?);base64,/, '');
+    const mime = image.match(/^data:(.*?);base64,/)?.[1] || 'image/png';
+    const extension = mime.split('/')[1] || 'png';
     const filename = `upload_${Date.now()}.${extension}`;
     const uploadDir = path.join(__dirname, '../uploads');
     

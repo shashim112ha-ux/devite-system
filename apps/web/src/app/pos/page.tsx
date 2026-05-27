@@ -97,16 +97,16 @@ export default function POSPage() {
       return;
     }
     setSelectedProduct(product);
-    setSize("وسط");
-    setSugar("50%");
-    setIce("عادي");
+    setSize(product.sizes?.length > 0 ? product.sizes[0] : "-");
+    setSugar(product.sugarLevels?.length > 0 ? product.sugarLevels[0] : "-");
+    setIce(product.iceLevels?.length > 0 ? product.iceLevels[0] : "-");
     setNotes("");
   };
 
   const addToCart = () => {
     if (!selectedProduct) return;
     
-    // Calculate extra cost if large size
+    // Calculate extra cost if large size (keep legacy logic if size matches exactly)
     let extraCost = 0;
     if (size === "كبير") extraCost = 0.5;
     if (size === "صغير") extraCost = -0.2;
@@ -521,52 +521,58 @@ export default function POSPage() {
               </div>
 
               {/* حجم المشروب */}
-              <div className="space-y-3">
-                <span className="text-xs font-bold text-gray-400">الحجم</span>
-                <div className="grid grid-cols-3 gap-3">
-                  {["صغير", "وسط", "كبير"].map(sz => (
-                    <button 
-                      key={sz} 
-                      onClick={() => setSize(sz)}
-                      className={`py-3 rounded-xl text-xs font-bold transition-all border ${size === sz ? "bg-brand-orange text-black border-brand-orange" : "bg-brand-black border-white/5 text-gray-400 hover:text-white"}`}
-                    >
-                      {sz} {sz === "كبير" ? "(+0.5 د.ب)" : sz === "صغير" ? "(-0.2 د.ب)" : ""}
-                    </button>
-                  ))}
+              {selectedProduct.sizes && selectedProduct.sizes.length > 0 && (
+                <div className="space-y-3">
+                  <span className="text-xs font-bold text-gray-400">الحجم</span>
+                  <div className="grid grid-cols-3 gap-3">
+                    {selectedProduct.sizes.map((sz: string) => (
+                      <button 
+                        key={sz} 
+                        onClick={() => setSize(sz)}
+                        className={`py-3 rounded-xl text-xs font-bold transition-all border ${size === sz ? "bg-brand-orange text-black border-brand-orange" : "bg-brand-black border-white/5 text-gray-400 hover:text-white"}`}
+                      >
+                        {sz} {sz === "كبير" ? "(+0.5 د.ب)" : sz === "صغير" ? "(-0.2 د.ب)" : ""}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* نسبة السكر */}
-              <div className="space-y-3">
-                <span className="text-xs font-bold text-gray-400">مستوى السكر</span>
-                <div className="grid grid-cols-3 gap-3">
-                  {["بدون سكر", "50%", "100%"].map(sg => (
-                    <button 
-                      key={sg} 
-                      onClick={() => setSugar(sg)}
-                      className={`py-3 rounded-xl text-xs font-bold transition-all border ${sugar === sg ? "bg-brand-orange text-black border-brand-orange" : "bg-brand-black border-white/5 text-gray-400 hover:text-white"}`}
-                    >
-                      {sg}
-                    </button>
-                  ))}
+              {selectedProduct.sugarLevels && selectedProduct.sugarLevels.length > 0 && (
+                <div className="space-y-3">
+                  <span className="text-xs font-bold text-gray-400">مستوى السكر</span>
+                  <div className="grid grid-cols-3 gap-3">
+                    {selectedProduct.sugarLevels.map((sg: string) => (
+                      <button 
+                        key={sg} 
+                        onClick={() => setSugar(sg)}
+                        className={`py-3 rounded-xl text-xs font-bold transition-all border ${sugar === sg ? "bg-brand-orange text-black border-brand-orange" : "bg-brand-black border-white/5 text-gray-400 hover:text-white"}`}
+                      >
+                        {sg}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* كمية الثلج */}
-              <div className="space-y-3">
-                <span className="text-xs font-bold text-gray-400">الثلج</span>
-                <div className="grid grid-cols-3 gap-3">
-                  {["بدون ثلج", "خفيف", "عادي"].map(ic => (
-                    <button 
-                      key={ic} 
-                      onClick={() => setIce(ic)}
-                      className={`py-3 rounded-xl text-xs font-bold transition-all border ${ice === ic ? "bg-brand-orange text-black border-brand-orange" : "bg-brand-black border-white/5 text-gray-400 hover:text-white"}`}
-                    >
-                      {ic}
-                    </button>
-                  ))}
+              {selectedProduct.iceLevels && selectedProduct.iceLevels.length > 0 && (
+                <div className="space-y-3">
+                  <span className="text-xs font-bold text-gray-400">الثلج</span>
+                  <div className="grid grid-cols-3 gap-3">
+                    {selectedProduct.iceLevels.map((ic: string) => (
+                      <button 
+                        key={ic} 
+                        onClick={() => setIce(ic)}
+                        className={`py-3 rounded-xl text-xs font-bold transition-all border ${ice === ic ? "bg-brand-orange text-black border-brand-orange" : "bg-brand-black border-white/5 text-gray-400 hover:text-white"}`}
+                      >
+                        {ic}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* ملاحظات خاصة */}
               <div className="space-y-2">

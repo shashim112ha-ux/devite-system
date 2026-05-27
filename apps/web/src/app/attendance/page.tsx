@@ -8,6 +8,9 @@ import { motion } from "framer-motion";
 export default function AttendancePage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [showClockOutModal, setShowClockOutModal] = useState<string | null>(null); // Stores the userId for clock out
+  
+  const settingsQuery = trpc.getSystemSettings.useQuery();
 
   useEffect(() => {
     setUserRole(localStorage.getItem("userRole"));
@@ -25,12 +28,23 @@ export default function AttendancePage() {
     const isClockedIn = member?.attendance[0] && !member.attendance[0].checkOut;
 
     if (isClockedIn) {
-      await clockOutMutation.mutateAsync({ attendanceId: member.attendance[0].id });
+      setShowClockOutModal(userId); // Open modal instead of clocking out immediately
     } else {
       await clockInMutation.mutateAsync({ userId });
+      staffQuery.refetch();
+      historyQuery.refetch();
     }
-    staffQuery.refetch();
-    historyQuery.refetch();
+  };
+
+  const confirmClockOut = async () => {
+    if (!showClockOutModal) return;
+    const member = staffQuery.data?.find(m => m.id === showClockOutModal);
+    if (member?.attendance[0]) {
+       await clockOutMutation.mutateAsync({ attendanceId: member.attendance[0].id });
+       setShowClockOutModal(null);
+       staffQuery.refetch();
+       historyQuery.refetch();
+    }
   };
 
   return (
@@ -145,6 +159,38 @@ export default function AttendancePage() {
           </section>
         </div>
       )}
+
+      {/* Clock Out Instructions Modal */}
+      {showClockOutModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+            className="bg-brand-navy-light w-full max-w-md rounded-[30px] border border-brand-orange p-8">
+            <h2 className="text-2xl font-black text-brand-orange mb-6 flex items-center gap-2">
+               تعليمات الانصراف
+            </h2>
+            <div className="bg-brand-black p-5 rounded-2xl border border-white/5 mb-8">
+               <p className="text-white whitespace-pre-line leading-relaxed">
+                  {settingsQuery.data?.clockOutInstructions || "لا توجد تعليمات."}
+               </p>
+            </div>
+            <div className="flex gap-4">
+              <button 
+                onClick={confirmClockOut} 
+                className="flex-1 bg-red-600 hover:bg-red-700 py-4 rounded-xl font-bold text-white transition-all"
+              >
+                 قرأت التعليمات وتأكيد الانصراف
+              </button>
+              <button 
+                onClick={() => setShowClockOutModal(null)} 
+                className="bg-white/10 hover:bg-white/20 py-4 px-6 rounded-xl font-bold transition-all"
+              >
+                 إلغاء
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
     </div>
   );
 }

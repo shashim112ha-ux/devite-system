@@ -257,6 +257,9 @@ function ProductModal({ product, categories, inventory, onClose, onSave }: any) 
     categoryId: product?.categoryId ?? "",
     available: product?.available ?? true,
     image: product?.image ?? "",
+    sizes: product?.sizes ?? [],
+    sugarLevels: product?.sugarLevels ?? [],
+    iceLevels: product?.iceLevels ?? []
   });
   const [ingredients, setIngredients] = useState<any[]>(
     product?.ingredients?.map((i: any) => ({ inventoryItemId: i.inventoryItemId, amountRequired: i.amountRequired })) ?? []
@@ -344,6 +347,20 @@ function ProductModal({ product, categories, inventory, onClose, onSave }: any) 
           <div className="flex items-center gap-3 p-4 bg-brand-black rounded-2xl border border-white/5">
             <input type="checkbox" id="avail" checked={form.available} onChange={e => setForm({...form, available: e.target.checked})} className="w-5 h-5 accent-brand-orange" />
             <label htmlFor="avail" className="font-bold cursor-pointer">الصنف متاح للطلب</label>
+          </div>
+
+          <div className="border-t border-white/5 pt-5 space-y-4">
+             <h4 className="font-bold text-brand-orange">إعدادات الإضافات (اختياري)</h4>
+             <p className="text-xs text-gray-400 mb-2">أدخل القيم مفصولة بفاصلة (مثال: صغير، وسط، كبير). اتركها فارغة إذا لم تكن هناك خيارات.</p>
+             <Field label="الأحجام المتوفرة">
+                <input value={form.sizes.join(', ')} onChange={e => setForm({...form, sizes: e.target.value.split(',').map(s=>s.trim()).filter(Boolean)})} className="field-input" placeholder="مثلاً: S, M, L" />
+             </Field>
+             <Field label="مستويات السكر">
+                <input value={form.sugarLevels.join(', ')} onChange={e => setForm({...form, sugarLevels: e.target.value.split(',').map(s=>s.trim()).filter(Boolean)})} className="field-input" placeholder="مثلاً: بدون، قليل، وسط، زيادة" />
+             </Field>
+             <Field label="كميات الثلج">
+                <input value={form.iceLevels.join(', ')} onChange={e => setForm({...form, iceLevels: e.target.value.split(',').map(s=>s.trim()).filter(Boolean)})} className="field-input" placeholder="مثلاً: بدون، خفيف، عادي، زيادة" />
+             </Field>
           </div>
 
           {/* Ingredients */}

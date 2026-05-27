@@ -106,6 +106,9 @@ export const appRouter = router({
       imageUrl: z.string().optional().nullable(),
       available: z.boolean().optional(),
       unavailableReason: z.string().optional().nullable(),
+      sizes: z.array(z.string()).optional(),
+      sugarLevels: z.array(z.string()).optional(),
+      iceLevels: z.array(z.string()).optional(),
       ingredients: z.array(z.object({
         inventoryItemId: z.string(),
         amountRequired: z.number()
@@ -1737,6 +1740,7 @@ export const appRouter = router({
       whatsappOrderMsg: z.string().optional().nullable(),
       whatsappReadyMsg: z.string().optional().nullable(),
       whatsappShiftMsg: z.string().optional().nullable(),
+      clockOutInstructions: z.string().optional().nullable(),
     }))
     .mutation(async ({ input, ctx }) => {
       const existing = await ctx.prisma.systemSetting.findFirst();

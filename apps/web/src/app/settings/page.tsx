@@ -74,7 +74,8 @@ function GeneralSettingsTab({ data, refetch }: any) {
       storeName: 'Devite ERP',
       currency: 'د.ب',
       taxRate: 10,
-      defaultPrepTime: 15
+      defaultPrepTime: 15,
+      clockOutInstructions: 'حافظ على نظافة العربة\nادخل جميع الاجهزة من الخارج\nتأكد من اغلاق جميع الليتات الخارجية'
    });
 
    const handleSave = async () => {
@@ -83,7 +84,8 @@ function GeneralSettingsTab({ data, refetch }: any) {
             storeName: formData.storeName,
             currency: formData.currency,
             taxRate: Number(formData.taxRate),
-            defaultPrepTime: Number(formData.defaultPrepTime)
+            defaultPrepTime: Number(formData.defaultPrepTime),
+            clockOutInstructions: formData.clockOutInstructions
          });
          alert("تم حفظ الإعدادات بنجاح");
          refetch();
@@ -109,12 +111,18 @@ function GeneralSettingsTab({ data, refetch }: any) {
                <input type="number" value={formData.taxRate || ''} onChange={e => setFormData({...formData, taxRate: e.target.value})} className="w-full bg-brand-black p-4 rounded-xl border border-white/5" />
             </div>
             <div>
-               <label className="block text-gray-400 text-sm mb-2">وقت التحضير الافتراضي (دقائق)</label>
+               <label className="block text-gray-400 text-sm mb-2">وقت التحضير الافتراضي (دقيقة)</label>
                <input type="number" value={formData.defaultPrepTime || ''} onChange={e => setFormData({...formData, defaultPrepTime: e.target.value})} className="w-full bg-brand-black p-4 rounded-xl border border-white/5" />
             </div>
          </div>
+         
+         <div className="mt-6">
+            <label className="block text-gray-400 text-sm mb-2">تعليمات نهاية الدوام (تظهر للموظف عند الانصراف)</label>
+            <textarea value={formData.clockOutInstructions || ''} onChange={e => setFormData({...formData, clockOutInstructions: e.target.value})} rows={3} className="w-full bg-brand-black p-4 rounded-xl border border-white/5" placeholder="أدخل التعليمات هنا..." />
+         </div>
+
          <button onClick={handleSave} className="mt-8 bg-brand-orange px-8 py-4 rounded-xl font-bold flex items-center gap-2">
-            <Save size={20} /> حفظ التعديلات
+            <Save size={20} /> حفظ الإعدادات
          </button>
       </div>
    );

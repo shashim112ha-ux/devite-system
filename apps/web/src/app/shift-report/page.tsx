@@ -209,6 +209,58 @@ export default function ShiftReportPage() {
     window.open(`https://wa.me/?text=${encodedText}`, '_blank');
   };
 
+    const sharePDFViaLink = async (report: any) => {
+      const input = document.getElementById('print-modal-area');
+      if (!input) return;
+      
+      const clone = input.cloneNode(true) as HTMLElement;
+      clone.style.width = '794px';
+      clone.style.backgroundColor = '#ffffff';
+      clone.style.color = '#000000';
+      clone.style.position = 'absolute';
+      clone.style.left = '-9999px';
+      clone.style.top = '0';
+      document.body.appendChild(clone);
+  
+      const elementsToInvert = clone.querySelectorAll('.bg-brand-black\\/40, .bg-brand-black\\/20, .text-gray-400, .text-white');
+      elementsToInvert.forEach((el: any) => {
+        el.style.backgroundColor = '#f9fafb';
+        el.style.color = '#000000';
+        el.style.borderColor = '#e5e7eb';
+      });
+  
+      try {
+        const canvas = await html2canvas(clone, { scale: 2, useCORS: true });
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+        
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        const pdfBase64 = pdf.output('datauristring');
+        
+        // Upload to API
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: pdfBase64 })
+        });
+        
+        if (!response.ok) throw new Error('Upload failed');
+        const data = await response.json();
+        const pdfUrl = data.url;
+        
+        // Open WhatsApp
+        const text = `*تقرير نهاية الشفت* 📝\nالتاريخ: ${new Date(report.date).toLocaleString('ar-BH')}\nالموظف: ${report.cashier?.name}\n\nرابط تحميل التقرير (PDF):\n${pdfUrl}`;
+        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+      } catch (err) {
+        console.error("PDF Export/Share failed", err);
+        alert("فشل رفع التقرير أو مشاركته. تأكد من اتصالك بالإنترنت.");
+      } finally {
+        document.body.removeChild(clone);
+      }
+    };
+
   const exportPDF = async () => {
     const input = document.getElementById('print-modal-area');
     if (!input) return;
@@ -757,13 +809,9 @@ export default function ShiftReportPage() {
                       </td>
                       <td className="p-4 text-center flex items-center justify-center gap-2">
                         <button
-                          onClick={() => {
-                             const phone = prompt("أدخل رقم الواتساب للإرسال الآلي مع الـ PDF (شامل رمز الدولة مثل +973...):");
-                             if (phone) sendWhatsAppMutation.mutate({ id: row.id, phone });
-                          }}
-                          disabled={sendWhatsAppMutation.isLoading}
+                          onClick={() => sharePDFViaLink(row)}
                           className="bg-green-600 hover:bg-green-500 text-white font-bold p-2 rounded-lg text-xs transition-all shadow-md shadow-green-500/20"
-                          title="إرسال آلي عبر النظام (مع PDF)"
+                          title="مشاركة التقرير عبر واتساب (ملف PDF)"
                         >
                           <MessageCircle size={14} className="mx-auto" />
                         </button>

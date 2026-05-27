@@ -151,8 +151,8 @@ export default function CustomerHome() {
               onClick={() => setSelectedProduct(product)}
               className="bg-brand-navy-light/40 rounded-[35px] p-5 border border-white/5 flex flex-col items-center text-center relative overflow-hidden"
             >
-              <div className="w-full aspect-square bg-brand-black rounded-3xl mb-4 flex items-center justify-center text-4xl">
-                 🍹
+              <div className="w-full aspect-square bg-brand-black rounded-3xl mb-4 flex items-center justify-center text-4xl overflow-hidden">
+                 {product.image ? <img src={product.image} alt={product.name} className="w-full h-full object-cover" /> : "🍹"}
               </div>
               <h3 className="font-bold text-sm mb-1">{product.name}</h3>
               <p className="text-brand-gold text-xs font-black">{product.price} د.ب</p>
@@ -272,9 +272,9 @@ function NavIcon({ icon, label, active, href }: any) {
 }
 
 function ProductDetailsModal({ product, onClose, onAdd }: any) {
-  const [size, setSize] = useState("Large");
-  const [sugar, setSugar] = useState("Normal");
-  const [ice, setIce] = useState("Normal");
+  const [size, setSize] = useState(product.sizes?.length > 0 ? product.sizes[0] : "-");
+  const [sugar, setSugar] = useState(product.sugarLevels?.length > 0 ? product.sugarLevels[0] : "-");
+  const [ice, setIce] = useState(product.iceLevels?.length > 0 ? product.iceLevels[0] : "-");
   const [notes, setNotes] = useState("");
 
   return (
@@ -285,17 +285,25 @@ function ProductDetailsModal({ product, onClose, onAdd }: any) {
       className="fixed inset-0 z-50 bg-brand-black flex flex-col"
     >
       <div className="relative h-[40vh] bg-brand-navy">
-        <button onClick={onClose} className="absolute top-8 right-8 z-10 bg-black/40 p-3 rounded-2xl"><X /></button>
-        <div className="w-full h-full flex items-center justify-center text-8xl">🥤</div>
+        <button onClick={onClose} className="absolute top-8 right-8 z-10 bg-black/40 text-white p-3 rounded-2xl"><X /></button>
+        <div className="w-full h-full flex items-center justify-center text-8xl overflow-hidden">
+          {product.image ? <img src={product.image} alt={product.name} className="w-full h-full object-cover" /> : "🥤"}
+        </div>
       </div>
-      <div className="flex-1 bg-brand-black rounded-t-[50px] -mt-12 p-10 overflow-y-auto">
+      <div className="flex-1 bg-brand-black rounded-t-[50px] -mt-12 p-10 overflow-y-auto relative z-20">
         <h2 className="text-3xl font-black mb-2">{product.name}</h2>
         <p className="text-brand-gold text-2xl font-black mb-6">{product.price} د.ب</p>
-        <p className="text-gray-500 text-sm leading-relaxed mb-8">{product.description || "عصير طازج ومبرد محضر من أفضل المكونات."}</p>
+        <p className="text-gray-500 text-sm leading-relaxed mb-8">{product.description || "معد من أفضل المكونات الطازجة."}</p>
 
-        <OptionGroup label="الحجم" options={["Large", "Small"]} value={size} onChange={setSize} />
-        <OptionGroup label="السكر" options={["Normal", "Low", "Extra", "None"]} value={sugar} onChange={setSugar} />
-        <OptionGroup label="الثلج" options={["Normal", "Low", "None"]} value={ice} onChange={setIce} />
+        {product.sizes && product.sizes.length > 0 && (
+          <OptionGroup label="الحجم" options={product.sizes} value={size} onChange={setSize} />
+        )}
+        {product.sugarLevels && product.sugarLevels.length > 0 && (
+          <OptionGroup label="السكر" options={product.sugarLevels} value={sugar} onChange={setSugar} />
+        )}
+        {product.iceLevels && product.iceLevels.length > 0 && (
+          <OptionGroup label="الثلج" options={product.iceLevels} value={ice} onChange={setIce} />
+        )}
 
         <div className="mb-10">
           <label className="text-xs text-brand-gold font-bold block mb-3">ملاحظات إضافية</label>
