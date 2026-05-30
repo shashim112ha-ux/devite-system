@@ -338,16 +338,21 @@ export const appRouter = router({
       notes: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      return ctx.prisma.$transaction(async (tx) => {
-        // 1. Check Inventory quantities first (fail-fast validation)
-        for (const item of input.items) {
-          const product = await tx.product.findUnique({
-            where: { id: item.productId },
+        return ctx.prisma.$transaction(async (tx) => {
+          // Pre-fetch all needed products once to optimize transaction speed and avoid timeouts
+          const productIds = Array.from(new Set(input.items.map(i => i.productId)));
+          const products = await tx.product.findMany({
+            where: { id: { in: productIds } },
             include: { 
               ingredients: { include: { inventoryItem: true } },
               variants: { include: { ingredients: { include: { inventoryItem: true } } } }
             }
           });
+          const productMap = new Map(products.map(p => [p.id, p]));
+
+          // 1. Check Inventory quantities first (fail-fast validation)
+          for (const item of input.items) {
+            const product = productMap.get(item.productId);
           if (product) {
             const ingredientsToUse = item.variantId 
               ? (product.variants.find(v => v.id === item.variantId)?.ingredients || [])
@@ -372,10 +377,7 @@ export const appRouter = router({
         
         let itemsPrepTime = 0;
         for (const item of input.items) {
-          const prod = await tx.product.findUnique({ 
-            where: { id: item.productId },
-            include: { variants: true }
-          });
+          const prod = productMap.get(item.productId);
           if (prod) {
             const varTime = item.variantId ? prod.variants.find(v => v.id === item.variantId)?.prepTime : undefined;
             itemsPrepTime += (varTime || prod.prepTime || 5) * item.quantity;
@@ -454,13 +456,7 @@ export const appRouter = router({
 
         // 5. Decrement Inventory & Generate Warnings
         for (const item of input.items) {
-          const product = await tx.product.findUnique({
-            where: { id: item.productId },
-            include: { 
-              ingredients: true,
-              variants: { include: { ingredients: true } }
-            }
-          });
+          const product = productMap.get(item.productId);
           if (product) {
             const ingredientsToUse = item.variantId 
               ? (product.variants.find(v => v.id === item.variantId)?.ingredients || [])
@@ -489,6 +485,9 @@ export const appRouter = router({
 
         io?.emit('order_created', order);
         return order;
+      }, {
+        maxWait: 10000, // 10s
+        timeout: 30000  // 30s
       });
     }),
 
