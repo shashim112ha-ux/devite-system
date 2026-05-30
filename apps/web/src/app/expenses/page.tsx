@@ -30,6 +30,9 @@ export default function ExpensesPage() {
   const [receiptBase64, setReceiptBase64] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
 
+  const userRole = typeof window !== 'undefined' ? localStorage.getItem('userRole') : null;
+  const isAdminOrManager = userRole === 'ADMIN' || userRole === 'MANAGER';
+
   const utils = trpc.useContext();
   const { data: expensesList, isLoading: loadingExpenses } = trpc.getDetailedExpenses.useQuery();
   const { data: analytics, isLoading: loadingAnalytics } = trpc.getExpenseAnalytics.useQuery();
@@ -361,7 +364,9 @@ export default function ExpensesPage() {
               >
                 <option value="">بدون حساب محدد (خزينة عامة)</option>
                 {accountsList?.map((acc) => (
-                  <option key={acc.id} value={acc.id}>{acc.name} - رصيد: {acc.balance} د.ب</option>
+                  <option key={acc.id} value={acc.id}>
+                    {acc.name} {isAdminOrManager ? `- رصيد: ${acc.balance} د.ب` : ''}
+                  </option>
                 ))}
               </select>
             </div>

@@ -17,6 +17,7 @@ export default function POSPage() {
   // Modifiers Modal State
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [size, setSize] = useState<string>("وسط");
+  const [variantId, setVariantId] = useState<string>("");
   const [sugar, setSugar] = useState<string>("50%");
   const [ice, setIce] = useState<string>("عادي");
   const [notes, setNotes] = useState<string>("");
@@ -106,13 +107,21 @@ export default function POSPage() {
   const addToCart = () => {
     if (!selectedProduct) return;
     
-    // Calculate extra cost if large size (keep legacy logic if size matches exactly)
     let extraCost = 0;
-    if (size === "كبير") extraCost = 0.5;
-    if (size === "صغير") extraCost = -0.2;
-    const finalPrice = Number(selectedProduct.price) + extraCost;
+    let finalPrice = Number(selectedProduct.price);
+    
+    if (variantId && selectedProduct.variants) {
+      const v = selectedProduct.variants.find((v: any) => v.id === variantId);
+      if (v) {
+        finalPrice = v.price;
+      }
+    } else {
+      if (size === "كبير") extraCost = 0.5;
+      if (size === "صغير") extraCost = -0.2;
+      finalPrice += extraCost;
+    }
 
-    const cartItemId = `${selectedProduct.id}-${size}-${sugar}-${ice}-${notes}`;
+    const cartItemId = `${selectedProduct.id}-${variantId}-${size}-${sugar}-${ice}-${notes}`;
     
     const existing = cart.find(item => item.cartItemId === cartItemId);
     if (existing) {
@@ -123,6 +132,7 @@ export default function POSPage() {
       setCart([...cart, {
         cartItemId,
         id: selectedProduct.id,
+        variantId,
         name: selectedProduct.name,
         price: finalPrice,
         size,
@@ -163,10 +173,11 @@ export default function POSPage() {
         cashierId,
         customerPhone: customerPhone || undefined,
         customerName: customerName || undefined,
-        items: cart.map(item => ({
+        items: cart.map((item) => ({
           productId: item.id,
+          variantId: item.variantId || undefined,
           quantity: item.quantity,
-          price: Number(item.price),
+          price: item.price,
           size: item.size,
           sugar: item.sugar,
           ice: item.ice,
@@ -177,7 +188,6 @@ export default function POSPage() {
       });
 
       setLastOrder(order);
-      alert('تم إرسال الطلب للمطبخ بنجاح');
       
       // WhatsApp interactive link
       if (customerPhone && settingsQuery.data?.whatsappEnabled) {
@@ -188,11 +198,6 @@ export default function POSPage() {
         const url = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(msg)}`;
         window.open(url, '_blank');
       }
-
-      // Auto trigger print
-      setTimeout(() => {
-        window.print();
-      }, 500);
       
       setCart([]);
       setCustomerPhone("");
@@ -376,10 +381,10 @@ export default function POSPage() {
         </div>
       </div>
 
-      {/* شاشة اختيار المنتجات الرئيسية */}
-      <div className="flex-1 p-4 lg:p-8 flex flex-col overflow-hidden">
+      {/* منطقة المنتجات الرئيسية */}
+      <div className="flex-1 p-4 lg:p-8 flex flex-col overflow-hidden print:hidden">
         
-        {/* شريط البحث وتصفية التصنيفات */}
+        {/* هيدر البحث والتصنيفات */}
         <header className="flex flex-col gap-6 mb-8">
           <div className="flex items-center justify-between">
             <div>
@@ -520,8 +525,23 @@ export default function POSPage() {
                 </button>
               </div>
 
-              {/* حجم المشروب */}
-              {selectedProduct.sizes && selectedProduct.sizes.length > 0 && (
+              {/* خيارات الحجم أو الفئات المتفرعة */}
+              {selectedProduct.variants && selectedProduct.variants.length > 0 ? (
+                <div className="space-y-3">
+                  <span className="text-xs font-bold text-gray-400">خيارات الصنف</span>
+                  <div className="grid grid-cols-2 gap-3">
+                    {selectedProduct.variants.map((v: any) => (
+                      <button 
+                        key={v.id} 
+                        onClick={() => { setVariantId(v.id); setSize(v.sizeName); }}
+                        className={`py-3 rounded-xl text-xs font-bold transition-all border ${variantId === v.id ? "bg-brand-orange text-black border-brand-orange" : "bg-brand-black border-white/5 text-gray-400 hover:text-white"}`}
+                      >
+                        {v.sizeName} ({v.price} د.ب)
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : selectedProduct.sizes && selectedProduct.sizes.length > 0 ? (
                 <div className="space-y-3">
                   <span className="text-xs font-bold text-gray-400">الحجم</span>
                   <div className="grid grid-cols-3 gap-3">
@@ -536,7 +556,7 @@ export default function POSPage() {
                     ))}
                   </div>
                 </div>
-              )}
+              ) : null}
 
               {/* نسبة السكر */}
               {selectedProduct.sugarLevels && selectedProduct.sugarLevels.length > 0 && (
@@ -597,7 +617,59 @@ export default function POSPage() {
         )}
       </AnimatePresence>
 
-      {/* الطباعة الخفية للفاتورة */}
+      {/* نافذة تأكيد الطلب */}
+      {lastOrder && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:hidden">
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-brand-navy border border-white/10 p-8 rounded-3xl w-full max-w-md text-center shadow-2xl relative"
+          >
+            <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Sparkles className="text-green-500" size={40} />
+            </div>
+            
+            <h2 className="text-2xl font-black text-white mb-2">تم اعتماد الطلب بنجاح</h2>
+            <p className="text-brand-orange font-bold text-lg mb-6">رقم الطلب: #{lastOrder.orderNumber}</p>
+            
+            <div className="bg-brand-black/50 rounded-2xl p-4 space-y-3 mb-8 text-sm">
+              <div className="flex justify-between items-center text-gray-300">
+                <span>الوقت المتوقع:</span>
+                <span className="font-bold text-white">{lastOrder.estimatedTime} دقيقة</span>
+              </div>
+              <div className="flex justify-between items-center text-gray-300">
+                <span>الإجمالي:</span>
+                <span className="font-bold text-white">{lastOrder.total.toFixed(3)} د.ب</span>
+              </div>
+              {lastOrder.customer && (
+                <div className="flex justify-between items-center text-gray-300">
+                  <span>النقاط المضافة:</span>
+                  <span className="font-bold text-brand-gold flex items-center gap-1">
+                    <Award size={14} /> {Math.floor(lastOrder.total)} نقطة
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-4">
+              <button 
+                onClick={() => setLastOrder(null)}
+                className="flex-1 bg-white/5 hover:bg-white/10 text-white py-4 rounded-xl font-bold transition-all border border-white/5"
+              >
+                طلب جديد
+              </button>
+              <button 
+                onClick={() => window.print()}
+                className="flex-1 bg-brand-orange hover:bg-brand-gold text-black py-4 rounded-xl font-bold shadow-lg transition-all"
+              >
+                طباعة الفاتورة
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* الفاتورة المخفية للطباعة */}
       {lastOrder && <PrintableInvoice order={lastOrder} />}
 
     </div>

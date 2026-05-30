@@ -1,3 +1,4 @@
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
@@ -65,7 +66,8 @@ export const appRouter = router({
     const products = await ctx.prisma.product.findMany({
       include: { 
         category: true,
-        ingredients: { include: { inventoryItem: true } }
+        ingredients: { include: { inventoryItem: true } },
+        variants: { include: { ingredients: { include: { inventoryItem: true } } } }
       },
     });
 
@@ -78,10 +80,30 @@ export const appRouter = router({
         autoCost += (ing.amountRequired * ing.inventoryItem.unitPrice);
       });
 
+      const processedVariants = product.variants.map(variant => {
+        let varAutoCost = 0;
+        let varStockAvailable = true;
+        variant.ingredients.forEach(ing => {
+          if (ing.inventoryItem.quantity < ing.amountRequired) varStockAvailable = false;
+          varAutoCost += (ing.amountRequired * ing.inventoryItem.unitPrice);
+        });
+        return {
+          ...variant,
+          autoCost: variant.ingredients.length > 0 ? Math.round(varAutoCost * 1000) / 1000 : variant.autoCost,
+          dynamicAvailable: variant.isAvailable && (variant.ingredients.length === 0 || varStockAvailable)
+        };
+      });
+
+      // If a product has variants, its availability is dependent on if AT LEAST ONE variant is available.
+      // If no variants, fallback to basic ingredients.
+      const hasVariants = processedVariants.length > 0;
+      const anyVariantAvailable = processedVariants.some(v => v.dynamicAvailable);
+      
       return {
         ...product,
+        variants: processedVariants,
         autoCost: Math.round(autoCost * 1000) / 1000,
-        dynamicAvailable: product.available && (product.ingredients.length === 0 || isStockAvailable)
+        dynamicAvailable: product.available && (hasVariants ? anyVariantAvailable : (product.ingredients.length === 0 || isStockAvailable))
       };
     });
   }),
@@ -303,6 +325,7 @@ export const appRouter = router({
       customerName: z.string().optional(),
       items: z.array(z.object({
         productId: z.string(),
+        variantId: z.string().optional(),
         quantity: z.number(),
         price: z.number(),
         size: z.string().optional(),
@@ -320,13 +343,23 @@ export const appRouter = router({
         for (const item of input.items) {
           const product = await tx.product.findUnique({
             where: { id: item.productId },
-            include: { ingredients: { include: { inventoryItem: true } } }
+            include: { 
+              ingredients: { include: { inventoryItem: true } },
+              variants: { include: { ingredients: { include: { inventoryItem: true } } } }
+            }
           });
           if (product) {
-            for (const ing of product.ingredients) {
+            const ingredientsToUse = item.variantId 
+              ? (product.variants.find(v => v.id === item.variantId)?.ingredients || [])
+              : product.ingredients;
+
+            for (const ing of ingredientsToUse) {
               const needed = ing.amountRequired * item.quantity;
               if (ing.inventoryItem.quantity < needed) {
-                throw new Error(`مخزون غير كافٍ للمادة: ${ing.inventoryItem.name}. المتبقي: ${ing.inventoryItem.quantity} ${ing.inventoryItem.unit}`);
+                throw new TRPCError({ 
+                  code: 'BAD_REQUEST', 
+                  message: `مخزون غير كافٍ للمادة: ${ing.inventoryItem.name}. المتبقي: ${ing.inventoryItem.quantity} ${ing.inventoryItem.unit}` 
+                });
               }
             }
           }
@@ -339,9 +372,13 @@ export const appRouter = router({
         
         let itemsPrepTime = 0;
         for (const item of input.items) {
-          const prod = await tx.product.findUnique({ where: { id: item.productId } });
+          const prod = await tx.product.findUnique({ 
+            where: { id: item.productId },
+            include: { variants: true }
+          });
           if (prod) {
-            itemsPrepTime += (prod.prepTime || 5) * item.quantity;
+            const varTime = item.variantId ? prod.variants.find(v => v.id === item.variantId)?.prepTime : undefined;
+            itemsPrepTime += (varTime || prod.prepTime || 5) * item.quantity;
           }
         }
 
@@ -359,22 +396,30 @@ export const appRouter = router({
             where: { phone: input.customerPhone },
             update: { 
               points: { increment: Math.floor(input.total) },
-              name: input.customerName || 'عميل جديد'
+              ...(input.customerName && input.customerName.trim() !== '' ? { name: input.customerName } : {})
             },
             create: {
               phone: input.customerPhone,
-              name: input.customerName || 'عميل جديد',
+              name: (input.customerName && input.customerName.trim() !== '') ? input.customerName : 'زبون بدون اسم',
               points: Math.floor(input.total)
             }
           });
           customerId = customer.id;
         }
 
+        let finalCashierId = input.cashierId;
+        if (finalCashierId) {
+          const userExists = await tx.user.findUnique({ where: { id: finalCashierId } });
+          if (!userExists) {
+            finalCashierId = undefined; // Nullify if invalid to prevent foreign key error
+          }
+        }
+
         // 4. Create Order
         const order = await tx.order.create({
           data: {
             orderNumber: nextOrderNumber,
-            cashierId: input.cashierId,
+            cashierId: finalCashierId,
             customerId: customerId,
             total: input.total,
             paymentMethod: input.paymentMethod,
@@ -384,6 +429,7 @@ export const appRouter = router({
             items: {
               create: input.items.map(item => ({
                 productId: item.productId,
+                variantId: item.variantId,
                 quantity: item.quantity,
                 price: item.price,
                 size: item.size,
@@ -401,7 +447,7 @@ export const appRouter = router({
           data: {
             orderId: order.id,
             stage: 'CREATED',
-            staffId: input.cashierId || (ctx.user ? ctx.user.id : undefined),
+            staffId: finalCashierId || (ctx.user ? ctx.user.id : undefined),
             durationSeconds: 0
           }
         });
@@ -410,10 +456,17 @@ export const appRouter = router({
         for (const item of input.items) {
           const product = await tx.product.findUnique({
             where: { id: item.productId },
-            include: { ingredients: true }
+            include: { 
+              ingredients: true,
+              variants: { include: { ingredients: true } }
+            }
           });
           if (product) {
-            for (const ing of product.ingredients) {
+            const ingredientsToUse = item.variantId 
+              ? (product.variants.find(v => v.id === item.variantId)?.ingredients || [])
+              : product.ingredients;
+
+            for (const ing of ingredientsToUse) {
               const updated = await tx.inventoryItem.update({
                 where: { id: ing.inventoryItemId },
                 data: { quantity: { decrement: ing.amountRequired * item.quantity } }
@@ -596,18 +649,24 @@ export const appRouter = router({
       unitPrice: z.number().optional(), 
       supplier: z.string().optional(), 
       category: z.string().optional(),
-      expiryDate: z.string().optional(),
+      expiryDate: z.string().nullable().optional(),
       reason: z.string().optional()
     }))
     .mutation(async ({ input, ctx }) => {
       const { id, reason, expiryDate, ...data } = input;
       
       const oldItem = await ctx.prisma.inventoryItem.findUnique({ where: { id } });
-      if (!oldItem) throw new Error("المادة غير موجودة");
+      if (!oldItem) throw new TRPCError({ code: 'NOT_FOUND', message: "عنصر المخزون غير موجود" });
 
-      const parsedExpiry = expiryDate ? new Date(expiryDate) : undefined;
       const updateData: any = { ...data };
-      if (parsedExpiry) updateData.expiryDate = parsedExpiry;
+      if (expiryDate !== undefined) {
+        if (expiryDate && expiryDate.trim() !== '') {
+          const parsed = new Date(expiryDate);
+          if (!isNaN(parsed.getTime())) updateData.expiryDate = parsed;
+        } else {
+          updateData.expiryDate = null;
+        }
+      }
 
       const item = await ctx.prisma.inventoryItem.update({
         where: { id },
@@ -655,14 +714,89 @@ export const appRouter = router({
       return item;
     }),
 
-  getInventoryAuditLogs: staffProcedure
-    .input(z.object({ inventoryItemId: z.string().optional() }).optional())
-    .query(async ({ input, ctx }) => {
-      return ctx.prisma.inventoryAuditLog.findMany({
-        where: input?.inventoryItemId ? { inventoryItemId: input.inventoryItemId } : undefined,
-        orderBy: { createdAt: 'desc' },
-        include: { inventoryItem: { select: { name: true } } }
+  getInventoryAuditLogs: adminProcedure.query(async ({ ctx }) => {
+    return ctx.prisma.inventoryAuditLog.findMany({ 
+      orderBy: { createdAt: 'desc' },
+      include: { inventoryItem: true }
+    });
+  }),
+
+  deleteInventoryItem: managerProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const { id } = input;
+      const item = await ctx.prisma.inventoryItem.findUnique({
+        where: { id },
+        include: { _count: { select: { productIngredients: true } } }
       });
+      if (!item) throw new TRPCError({ code: 'NOT_FOUND', message: "العنصر غير موجود" });
+
+      if (item._count.productIngredients > 0) {
+        throw new TRPCError({ 
+          code: 'BAD_REQUEST', 
+          message: "لا يمكن حذف هذه المادة لارتباطها بمنتجات. يرجى تعديل الكمية لـ 0 أو إزالتها من مكونات المنتجات أولاً." 
+        });
+      }
+
+      await ctx.prisma.inventoryItem.delete({ where: { id } });
+      await logAudit(ctx.prisma, ctx.user.id, 'DELETE_INVENTORY', `حذف عنصر المخزون: ${item.name}`);
+      return { success: true };
+    }),
+
+  reportDamagedItem: staffProcedure
+    .input(z.object({
+      inventoryItemId: z.string(),
+      quantity: z.number().min(0.01),
+      reason: z.string(),
+      notes: z.string().optional()
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const item = await ctx.prisma.inventoryItem.findUnique({ where: { id: input.inventoryItemId } });
+      if (!item) throw new TRPCError({ code: 'NOT_FOUND', message: "العنصر غير موجود" });
+
+      if (item.quantity < input.quantity) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: "الكمية التالفة أكبر من الكمية المتوفرة في المخزون" });
+      }
+
+      // Deduct from inventory
+      const updatedItem = await ctx.prisma.inventoryItem.update({
+        where: { id: input.inventoryItemId },
+        data: { quantity: { decrement: input.quantity } }
+      });
+
+      // Log audit
+      await ctx.prisma.inventoryAuditLog.create({
+        data: {
+          inventoryItemId: item.id,
+          userId: ctx.user.id,
+          userName: ctx.user.name,
+          oldQuantity: item.quantity,
+          newQuantity: updatedItem.quantity,
+          oldPrice: item.unitPrice,
+          newPrice: item.unitPrice,
+          reason: 'إتلاف: ' + input.reason + (input.notes ? ` - ${input.notes}` : '')
+        }
+      });
+
+      // Record as a Loss/Expense automatically
+      const lossCost = item.unitPrice * input.quantity;
+      await ctx.prisma.expense.create({
+        data: {
+          category: 'تالف وخسائر',
+          supplier: 'نظام المخزون',
+          purpose: `إتلاف ${input.quantity} ${item.unit} من ${item.name} (${input.reason})`,
+          quantity: input.quantity,
+          unitPrice: item.unitPrice,
+          amount: lossCost,
+          paymentMethod: 'LOSS',
+          recordedById: ctx.user.id,
+          inventoryItemId: item.id,
+        }
+      });
+
+      await logAudit(ctx.prisma, ctx.user.id, 'REPORT_DAMAGED', `تسجيل تالف: ${input.quantity} ${item.unit} من ${item.name}`);
+      
+      return updatedItem;
     }),
 
   updateInventoryStock: staffProcedure

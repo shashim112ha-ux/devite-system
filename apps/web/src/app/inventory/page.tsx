@@ -20,11 +20,13 @@ import { motion, AnimatePresence } from "framer-motion";
 
 export default function SmartInventory() {
   const [showAddModal, setShowAddModal] = useState(false);
-  const [view, setView] = useState<"stock" | "history">("stock");
+  const [view, setView] = useState<"stock" | "history" | "damaged">("stock");
   
   const inventoryQuery = trpc.getInventory.useQuery();
   const addInventoryMutation = trpc.addInventoryItem.useMutation();
   const updateInventoryMutation = trpc.updateInventoryItem.useMutation();
+  const deleteInventoryMutation = trpc.deleteInventoryItem.useMutation();
+  const reportDamagedMutation = trpc.reportDamagedItem.useMutation();
   
   const [editingItem, setEditingItem] = useState<any>(null);
 
@@ -39,6 +41,7 @@ export default function SmartInventory() {
           <div className="flex gap-4 mt-4">
              <button onClick={() => setView("stock")} className={`text-sm font-bold pb-2 border-b-2 transition-all ${view === 'stock' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-gray-500'}`}>المواد الحالية</button>
              <button onClick={() => setView("history")} className={`text-sm font-bold pb-2 border-b-2 transition-all ${view === 'history' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-gray-500'}`}>سجل التوريد</button>
+             <button onClick={() => setView("damaged")} className={`text-sm font-bold pb-2 border-b-2 transition-all ${view === 'damaged' ? 'border-brand-orange text-brand-orange' : 'border-transparent text-gray-500'}`}>العناصر التالفة</button>
           </div>
         </div>
         <div className="flex gap-4">
@@ -155,22 +158,38 @@ export default function SmartInventory() {
           initialData={editingItem}
           onClose={() => { setShowAddModal(false); setEditingItem(null); }} 
           onAdd={async (data: any) => {
-            if (editingItem) {
-               await updateInventoryMutation.mutateAsync({ id: editingItem.id, ...data });
-            } else {
-               await addInventoryMutation.mutateAsync(data);
+            try {
+              if (editingItem) {
+                 await updateInventoryMutation.mutateAsync({ id: editingItem.id, ...data });
+              } else {
+                 await addInventoryMutation.mutateAsync(data);
+              }
+              inventoryQuery.refetch();
+              setShowAddModal(false);
+              setEditingItem(null);
+            } catch (e: any) {
+              alert(`خطأ: ${e.message}`);
             }
-            inventoryQuery.refetch();
-            setShowAddModal(false);
-            setEditingItem(null);
-          }} 
+          }}
+          onDelete={async (id: string) => {
+            if (confirm("هل أنت متأكد من حذف هذه المادة نهائياً؟")) {
+              try {
+                await deleteInventoryMutation.mutateAsync({ id });
+                inventoryQuery.refetch();
+                setShowAddModal(false);
+                setEditingItem(null);
+              } catch (e: any) {
+                alert(`خطأ في الحذف: ${e.message}`);
+              }
+            }
+          }}
         />}
       </AnimatePresence>
     </div>
   );
 }
 
-function AddInventoryModal({ onClose, onAdd, initialData }: any) {
+function AddInventoryModal({ onClose, onAdd, onDelete, initialData }: any) {
   const [formData, setFormData] = useState(initialData || { name: '', quantity: 0, unit: 'كجم', minThreshold: 5, unitPrice: 0, supplier: '', expiryDate: '', reason: '' });
   const [totalPrice, setTotalPrice] = useState<number | string>(initialData ? initialData.quantity * initialData.unitPrice : '');
 
@@ -217,6 +236,9 @@ function AddInventoryModal({ onClose, onAdd, initialData }: any) {
         </div>
         <div className="flex gap-4 mt-8">
           <button onClick={() => onAdd(formData)} className="flex-1 bg-brand-orange py-4 rounded-xl font-bold">{initialData ? 'حفظ التعديلات' : 'إضافة'}</button>
+          {initialData && (
+            <button onClick={() => onDelete(initialData.id)} className="flex-1 bg-red-500/10 text-red-500 py-4 rounded-xl font-bold border border-red-500/20 hover:bg-red-500 hover:text-white transition-all">حذف العنصر</button>
+          )}
           <button onClick={onClose} className="flex-1 bg-white/10 py-4 rounded-xl font-bold">إلغاء</button>
         </div>
       </div>
@@ -237,6 +259,100 @@ function InventoryKPI({ title, value, icon, color }: any) {
           <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">{title}</p>
           <h3 className="text-3xl font-black">{value}</h3>
        </div>
+    </div>
+  );
+}
+
+function DamagedInventoryTab({ inventoryItems, onSubmit }: { inventoryItems: any[], onSubmit: (data: any) => void }) {
+  const [formData, setFormData] = useState({
+    inventoryItemId: '',
+    quantity: '',
+    reason: '',
+    notes: ''
+  });
+
+  return (
+    <div className="bg-brand-navy-light p-10 rounded-[40px] border border-white/5 max-w-3xl mx-auto shadow-2xl">
+      <div className="mb-8">
+        <h2 className="text-2xl font-black text-brand-gold mb-2 flex items-center gap-2">
+          <AlertCircle /> تسجيل عنصر تالف (متلفات)
+        </h2>
+        <p className="text-gray-400 text-sm">سيتم خصم الكمية من المخزون فوراً وتسجيل تكلفتها كخسائر مالية تلقائياً في حساب المصروفات.</p>
+      </div>
+
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <label className="text-sm font-bold text-gray-400">اختر المادة من المخزون</label>
+          <select 
+            className="w-full bg-brand-black border border-white/10 p-4 rounded-xl focus:border-brand-orange"
+            value={formData.inventoryItemId}
+            onChange={e => setFormData({ ...formData, inventoryItemId: e.target.value })}
+          >
+            <option value="">-- اختر المادة --</option>
+            {inventoryItems.map(item => (
+              <option key={item.id} value={item.id}>{item.name} (المتوفر: {item.quantity} {item.unit})</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-bold text-gray-400">الكمية التالفة</label>
+          <input 
+            type="number" 
+            step="0.01"
+            placeholder="مثال: 2.5" 
+            className="w-full bg-brand-black border border-white/10 p-4 rounded-xl focus:border-brand-orange"
+            value={formData.quantity}
+            onChange={e => setFormData({ ...formData, quantity: e.target.value })}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-bold text-gray-400">سبب الإتلاف الرئيسي</label>
+          <select 
+            className="w-full bg-brand-black border border-white/10 p-4 rounded-xl focus:border-brand-orange"
+            value={formData.reason}
+            onChange={e => setFormData({ ...formData, reason: e.target.value })}
+          >
+            <option value="">-- حدد السبب --</option>
+            <option value="انتهاء صلاحية">انتهاء صلاحية</option>
+            <option value="تلف أثناء التحضير">تلف أثناء التحضير</option>
+            <option value="سوء تخزين">سوء تخزين</option>
+            <option value="انسكاب/كسر">انسكاب / كسر</option>
+            <option value="أخرى">أخرى</option>
+          </select>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-bold text-gray-400">ملاحظات إضافية (اختياري)</label>
+          <textarea 
+            placeholder="اكتب أي ملاحظات أو تفاصيل عن سبب التلف..."
+            className="w-full bg-brand-black border border-white/10 p-4 rounded-xl focus:border-brand-orange min-h-[100px]"
+            value={formData.notes}
+            onChange={e => setFormData({ ...formData, notes: e.target.value })}
+          />
+        </div>
+
+        <button 
+          onClick={() => {
+            if (!formData.inventoryItemId || !formData.quantity || !formData.reason) {
+              alert("يرجى تعبئة جميع الحقول المطلوبة (المادة، الكمية، والسبب).");
+              return;
+            }
+            onSubmit({
+              inventoryItemId: formData.inventoryItemId,
+              quantity: Number(formData.quantity),
+              reason: formData.reason,
+              notes: formData.notes
+            });
+            setFormData({ inventoryItemId: '', quantity: '', reason: '', notes: '' });
+          }}
+          className="w-full bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 py-4 rounded-xl font-bold transition-all shadow-lg flex items-center justify-center gap-2"
+        >
+          <AlertCircle size={20} />
+          اعتماد التالف وخصم الكمية
+        </button>
+      </div>
     </div>
   );
 }

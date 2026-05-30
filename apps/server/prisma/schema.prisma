@@ -91,8 +91,33 @@ model Product {
 
   orderItems       OrderItem[]
   ingredients      ProductIngredient[]
+  variants         ProductVariant[]
+
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
+}
+
+model ProductVariant {
+  id              String   @id @default(cuid())
+  productId       String
+  product         Product  @relation(fields: [productId], references: [id])
+  sizeName        String   // small, medium, large
+  price           Float
+  manualCost      Float    @default(0)
+  autoCost        Float    @default(0)
+  prepTime        Int      @default(5)
+  isAvailable     Boolean  @default(true)
+  
+  ingredients     ProductVariantIngredient[]
+}
+
+model ProductVariantIngredient {
+  id              String   @id @default(cuid())
+  variantId       String
+  variant         ProductVariant @relation(fields: [variantId], references: [id])
+  inventoryItemId String
+  inventoryItem   InventoryItem  @relation(fields: [inventoryItemId], references: [id])
+  amountRequired  Float
 }
 
 model InventoryItem {
@@ -110,6 +135,7 @@ model InventoryItem {
   updatedAt    DateTime @updatedAt
 
   productIngredients ProductIngredient[]
+  variantIngredients ProductVariantIngredient[]
   purchaseRecords    PurchaseRecord[]
   expenses           Expense[]
   auditLogs          InventoryAuditLog[]
@@ -183,6 +209,7 @@ model OrderItem {
   id        String  @id @default(cuid())
   orderId   String
   productId String
+  variantId String?
   quantity  Int
   price     Float
   size      String? 

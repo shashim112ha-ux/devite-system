@@ -1,4 +1,4 @@
-import PDFDocument from 'pdfkit';
+import puppeteer from 'puppeteer';
 import { Client, LocalAuth, MessageMedia } from 'whatsapp-web.js';
 import qrcode from 'qrcode';
 
@@ -135,71 +135,138 @@ DEVITE System`,
 // PDF Generator
 // =========================================
 export async function generateShiftReportPDF(report: any): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ margin: 30, size: 'A4' });
-    const chunks: Buffer[] = [];
-
-    doc.on('data', (chunk: Buffer) => chunks.push(chunk));
-    doc.on('end', () => resolve(Buffer.concat(chunks)));
-    doc.on('error', reject);
-
-    // Header
-    doc.fontSize(20).fillColor('#e07b39').text('DEVITE - Shift Report', { align: 'center' });
-    doc.moveDown(0.5);
-    doc.fontSize(12).fillColor('#000').text(`Date: ${new Date(report.date).toLocaleDateString('en-GB')}`, { align: 'center' });
-    doc.text(`Cashier: ${report.cashier?.name || 'N/A'}`, { align: 'center' });
-    doc.moveDown();
-
-    // Financial
-    doc.fontSize(14).fillColor('#e07b39').text('Financial Summary');
-    doc.moveTo(30, doc.y).lineTo(565, doc.y).stroke('#e07b39');
-    doc.moveDown(0.3);
-    doc.fontSize(11).fillColor('#000');
-    doc.text(`Sales: ${report.profit?.toFixed(3)} BD`);
-    doc.text(`Expenses: ${report.expenses?.toFixed(3)} BD`);
-    doc.text(`Losses: ${report.losses?.toFixed(3)} BD`);
-    doc.text(`Cash: ${report.cashAmount?.toFixed(3)} BD`);
-    doc.text(`Card: ${report.cardAmount?.toFixed(3)} BD`);
-    doc.text(`Net Profit: ${report.netProfit?.toFixed(3)} BD`);
-    doc.text(`Difference: ${report.difference?.toFixed(3)} BD`);
-    doc.moveDown();
-
-    // Checklist
-    doc.fontSize(14).fillColor('#e07b39').text('Equipment & Supplies Check');
-    doc.moveTo(30, doc.y).lineTo(565, doc.y).stroke('#e07b39');
-    doc.moveDown(0.3);
-    doc.fontSize(11).fillColor('#000');
-    doc.text(`Internal Cleanliness: ${report.cleanlinessInternal ? '✓ OK' : '✗ Needs Attention'}`);
-    doc.text(`External Cleanliness: ${report.cleanlinessExternal ? '✓ OK' : '✗ Needs Attention'}`);
-    doc.text(`Fridge: ${report.fridgeStatus ? '✓ OK' : '✗ Issue'}`);
-    doc.text(`Ice Machine: ${report.iceMachineStatus ? '✓ OK' : '✗ Issue'}`);
-    doc.text(`Blender: ${report.blenderStatus ? '✓ OK' : '✗ Issue'}`);
-    doc.text(`Electricity: ${report.electricityStatus ? '✓ OK' : '✗ Issue'}`);
-    doc.text(`Water (In/Out): ${report.waterInternal}L / ${report.waterExternal}L`);
-    doc.text(`Petrol: ${report.petrolQuantity}L | Gas: ${report.gasQuantity} lbs`);
-    doc.text(`Cups: ${report.cupsQuantity} | Lids: ${report.lidsQuantity}`);
-    doc.text(`Napkins: ${report.napkinsQuantity} | Gloves: ${report.glovesQuantity}`);
-    doc.moveDown();
-
-    // Staff
-    doc.fontSize(14).fillColor('#e07b39').text('Attendance & Stats');
-    doc.moveTo(30, doc.y).lineTo(565, doc.y).stroke('#e07b39');
-    doc.moveDown(0.3);
-    doc.fontSize(11).fillColor('#000');
-    doc.text(`Present: ${report.presentStaff || 'N/A'}`);
-    doc.text(`Absent: ${report.absentStaff || 'None'}`);
-    doc.text(`Late: ${report.lateStaff || 'None'}`);
-    doc.text(`Orders: ${report.ordersCount} | Cancelled: ${report.cancelledOrdersCount}`);
-    doc.text(`Avg Prep Time: ${report.avgPrepTime} min`);
-
-    if (report.notes) {
-      doc.moveDown();
-      doc.fontSize(14).fillColor('#e07b39').text('Notes');
-      doc.fontSize(11).fillColor('#000').text(report.notes);
-    }
-
-    doc.end();
+  const browser = await puppeteer.launch({
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
   });
+  
+  try {
+    const page = await browser.newPage();
+    
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html dir="rtl" lang="ar">
+      <head>
+        <meta charset="UTF-8">
+        <title>تقرير نهاية الشفت</title>
+        <style>
+          @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap');
+          body {
+            font-family: 'Cairo', sans-serif;
+            margin: 0;
+            padding: 40px;
+            background-color: #fff;
+            color: #333;
+          }
+          .header {
+            text-align: center;
+            border-bottom: 3px solid #e07b39;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+          }
+          .header h1 {
+            color: #e07b39;
+            margin: 0;
+            font-size: 28px;
+            font-weight: 900;
+          }
+          .header p {
+            margin: 5px 0 0;
+            font-size: 16px;
+            color: #666;
+          }
+          .section {
+            margin-bottom: 30px;
+          }
+          .section-title {
+            color: #e07b39;
+            font-size: 20px;
+            font-weight: bold;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          th, td {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            text-align: right;
+          }
+          th {
+            background-color: #f9f9f9;
+            color: #555;
+          }
+          .highlight {
+            font-weight: bold;
+            color: #e07b39;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>DEVITE - تقرير نهاية الشفت</h1>
+          <p>التاريخ: ${new Date(report.date).toLocaleDateString('ar-BH')}</p>
+          <p>الكاشير: ${report.cashier?.name || 'غير محدد'}</p>
+        </div>
+
+        <div class="section">
+          <div class="section-title">الملخص المالي</div>
+          <table>
+            <tr><th>المبيعات</th><td>${report.profit?.toFixed(3)} د.ب</td></tr>
+            <tr><th>المصروفات</th><td>${report.expenses?.toFixed(3)} د.ب</td></tr>
+            <tr><th>الخسائر</th><td>${report.losses?.toFixed(3)} د.ب</td></tr>
+            <tr><th>النقد (كاش)</th><td>${report.cashAmount?.toFixed(3)} د.ب</td></tr>
+            <tr><th>البطاقة (أونلاين)</th><td>${report.cardAmount?.toFixed(3)} د.ب</td></tr>
+            <tr><th>صافي الربح</th><td class="highlight">${report.netProfit?.toFixed(3)} د.ب</td></tr>
+            <tr><th>عجز / زيادة الصندوق</th><td style="color: ${report.difference < 0 ? 'red' : 'green'}; font-weight: bold;">${report.difference?.toFixed(3)} د.ب</td></tr>
+          </table>
+        </div>
+
+        <div class="section">
+          <div class="section-title">حالة العربة والمعدات</div>
+          <table>
+            <tr><th>النظافة الداخلية</th><td>${report.cleanlinessInternal ? 'ممتازة ✅' : 'تحتاج تنظيف ❌'}</td></tr>
+            <tr><th>النظافة الخارجية</th><td>${report.cleanlinessExternal ? 'ممتازة ✅' : 'تحتاج تنظيف ❌'}</td></tr>
+            <tr><th>الماء الداخلي</th><td>${report.waterInternal} لتر</td></tr>
+            <tr><th>الماء الخارجي</th><td>${report.waterExternal} لتر</td></tr>
+            <tr><th>البترول</th><td>${report.petrolQuantity} لتر</td></tr>
+            <tr><th>الغاز</th><td>${report.gasQuantity} باوند</td></tr>
+          </table>
+        </div>
+
+        <div class="section">
+          <div class="section-title">أدوات الاستهلاك اليومية</div>
+          <table>
+            <tr><th>الأكواب المتبقية</th><td>${report.cupsQuantity}</td></tr>
+            <tr><th>الأغطية المتبقية</th><td>${report.lidsQuantity}</td></tr>
+            <tr><th>المناديل المتبقية</th><td>${report.napkinsQuantity}</td></tr>
+            <tr><th>القفازات المتبقية</th><td>${report.glovesQuantity}</td></tr>
+          </table>
+        </div>
+
+        <div class="section">
+          <div class="section-title">ملاحظات الشفت</div>
+          <p style="background: #f9f9f9; padding: 15px; border-radius: 8px; line-height: 1.6;">
+            ${report.notes ? report.notes.replace(/\n/g, '<br/>') : 'لا توجد ملاحظات.'}
+          </p>
+        </div>
+        
+        <div style="margin-top: 50px; text-align: center; color: #888; font-size: 12px;">
+          تم إصدار هذا التقرير آلياً من نظام Devite
+        </div>
+      </body>
+      </html>
+    `;
+    
+    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+    const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
+    
+    return Buffer.from(pdfBuffer);
+  } finally {
+    await browser.close();
+  }
 }
 
 export function fillTemplate(template: string, vars: Record<string, string>): string {
