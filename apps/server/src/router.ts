@@ -690,7 +690,7 @@ export const appRouter = router({
   }),
 
   addInventoryItem: staffProcedure
-    .input(z.object({ name: z.string(), quantity: z.number(), unit: z.string(), minThreshold: z.number(), unitPrice: z.number(), supplier: z.string().optional(), category: z.string().optional() }))
+    .input(z.object({ name: z.string(), quantity: z.number(), unit: z.string(), minThreshold: z.number(), unitPrice: z.number(), supplier: z.string().nullable().optional(), category: z.string().nullable().optional() }))
     .mutation(async ({ input, ctx }) => {
       const item = await ctx.prisma.inventoryItem.create({ data: input as any });
       await logAudit(ctx.prisma, ctx.user.id, 'ADD_INVENTORY', `إضافة مادة مخزنية: ${item.name}`);
@@ -705,8 +705,8 @@ export const appRouter = router({
       unit: z.string().optional(), 
       minThreshold: z.number().optional(), 
       unitPrice: z.number().optional(), 
-      supplier: z.string().optional(), 
-      category: z.string().optional(),
+      supplier: z.string().nullable().optional(), 
+      category: z.string().nullable().optional(),
       expiryDate: z.string().nullable().optional(),
       reason: z.string().optional()
     }))
