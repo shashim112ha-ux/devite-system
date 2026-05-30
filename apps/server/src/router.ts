@@ -134,18 +134,43 @@ export const appRouter = router({
       ingredients: z.array(z.object({
         inventoryItemId: z.string(),
         amountRequired: z.number()
+      })).optional(),
+      variants: z.array(z.object({
+        id: z.string().optional(),
+        sizeName: z.string(),
+        price: z.number(),
+        prepTime: z.number().optional().nullable(),
+        ingredients: z.array(z.object({
+          inventoryItemId: z.string(),
+          amountRequired: z.number()
+        })).optional()
       })).optional()
     }))
     .mutation(async ({ input, ctx }) => {
-      const { ingredients, ...productData } = input;
+      const { ingredients, variants, ...productData } = input;
       const product = await ctx.prisma.product.create({
         data: {
           ...productData,
           ...(ingredients && ingredients.length > 0 ? {
             ingredients: { create: ingredients }
+          } : {}),
+          ...(variants && variants.length > 0 ? {
+            variants: {
+              create: variants.map(v => ({
+                sizeName: v.sizeName,
+                price: v.price,
+                prepTime: v.prepTime || 5,
+                ingredients: {
+                  create: (v.ingredients || []).map(ing => ({
+                    amountRequired: ing.amountRequired,
+                    inventoryItem: { connect: { id: ing.inventoryItemId } }
+                  }))
+                }
+              }))
+            }
           } : {})
         } as any,
-        include: { category: true, ingredients: { include: { inventoryItem: true } } }
+        include: { category: true, ingredients: { include: { inventoryItem: true } }, variants: { include: { ingredients: true } } }
       });
       await logAudit(ctx.prisma, ctx.user.id, 'CREATE_PRODUCT', `إضافة الصنف: ${product.name} بسعر ${product.price} د.ب`);
       return product;
@@ -167,10 +192,20 @@ export const appRouter = router({
       ingredients: z.array(z.object({
         inventoryItemId: z.string(),
         amountRequired: z.number()
+      })).optional(),
+      variants: z.array(z.object({
+        id: z.string().optional(),
+        sizeName: z.string(),
+        price: z.number(),
+        prepTime: z.number().optional().nullable(),
+        ingredients: z.array(z.object({
+          inventoryItemId: z.string(),
+          amountRequired: z.number()
+        })).optional()
       })).optional()
     }))
     .mutation(async ({ input, ctx }) => {
-      const { id, ingredients, ...data } = input;
+      const { id, ingredients, variants, ...data } = input;
       const product = await ctx.prisma.$transaction(async (tx) => {
         if (ingredients) {
           await tx.productIngredient.deleteMany({ where: { productId: id } });
@@ -184,10 +219,34 @@ export const appRouter = router({
             });
           }
         }
+        
+        if (variants) {
+          // Delete existing variants and recreate them (cascade will delete ingredients)
+          await tx.productVariant.deleteMany({ where: { productId: id } });
+          if (variants.length > 0) {
+            for (const v of variants) {
+              await tx.productVariant.create({
+                data: {
+                  productId: id,
+                  sizeName: v.sizeName,
+                  price: v.price,
+                  prepTime: v.prepTime || 5,
+                  ingredients: {
+                    create: (v.ingredients || []).map(ing => ({
+                      amountRequired: ing.amountRequired,
+                      inventoryItem: { connect: { id: ing.inventoryItemId } }
+                    }))
+                  }
+                }
+              });
+            }
+          }
+        }
+
         return tx.product.update({
           where: { id },
           data,
-          include: { category: true, ingredients: { include: { inventoryItem: true } } }
+          include: { category: true, ingredients: { include: { inventoryItem: true } }, variants: { include: { ingredients: { include: { inventoryItem: true } } } } }
         });
       });
 

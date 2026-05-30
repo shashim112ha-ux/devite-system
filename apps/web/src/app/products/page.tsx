@@ -257,12 +257,20 @@ function ProductModal({ product, categories, inventory, onClose, onSave }: any) 
     categoryId: product?.categoryId ?? "",
     available: product?.available ?? true,
     image: product?.image ?? "",
-    sizes: product?.sizes ?? [],
     sugarLevels: product?.sugarLevels ?? [],
     iceLevels: product?.iceLevels ?? []
   });
   const [ingredients, setIngredients] = useState<any[]>(
     product?.ingredients?.map((i: any) => ({ inventoryItemId: i.inventoryItemId, amountRequired: i.amountRequired })) ?? []
+  );
+  const [variants, setVariants] = useState<any[]>(
+    product?.variants?.map((v: any) => ({
+      id: v.id,
+      sizeName: v.sizeName,
+      price: v.price,
+      prepTime: v.prepTime || 5,
+      ingredients: v.ingredients?.map((i: any) => ({ inventoryItemId: i.inventoryItemId, amountRequired: i.amountRequired })) ?? []
+    })) ?? []
   );
 
   const calculatedSystemCost = ingredients.reduce((sum, ing) => {
@@ -351,16 +359,70 @@ function ProductModal({ product, categories, inventory, onClose, onSave }: any) 
 
           <div className="border-t border-white/5 pt-5 space-y-4">
              <h4 className="font-bold text-brand-orange">إعدادات الإضافات (اختياري)</h4>
-             <p className="text-xs text-gray-400 mb-2">أدخل القيم مفصولة بفاصلة (مثال: صغير، وسط، كبير). اتركها فارغة إذا لم تكن هناك خيارات.</p>
-             <Field label="الأحجام المتوفرة">
-                <input value={form.sizes.join(', ')} onChange={e => setForm({...form, sizes: e.target.value.split(',').map(s=>s.trim()).filter(Boolean)})} className="field-input" placeholder="مثلاً: S, M, L" />
-             </Field>
+             <p className="text-xs text-gray-400 mb-2">أدخل القيم مفصولة بفاصلة. اتركها فارغة إذا لم تكن هناك خيارات.</p>
              <Field label="مستويات السكر">
                 <input value={form.sugarLevels.join(', ')} onChange={e => setForm({...form, sugarLevels: e.target.value.split(',').map(s=>s.trim()).filter(Boolean)})} className="field-input" placeholder="مثلاً: بدون، قليل، وسط، زيادة" />
              </Field>
              <Field label="كميات الثلج">
                 <input value={form.iceLevels.join(', ')} onChange={e => setForm({...form, iceLevels: e.target.value.split(',').map(s=>s.trim()).filter(Boolean)})} className="field-input" placeholder="مثلاً: بدون، خفيف، عادي، زيادة" />
              </Field>
+          </div>
+
+          {/* Variants (Sizes) */}
+          <div className="border-t border-white/5 pt-5">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h4 className="font-bold text-brand-orange">خيارات الأحجام / الأنواع المتوفرة</h4>
+                <p className="text-xs text-gray-400 mt-1">تجاهل هذه القائمة إذا كان للصنف حجم واحد وسعر ثابت.</p>
+              </div>
+              <button type="button" onClick={() => setVariants([...variants, { sizeName: "", price: Number(form.price), prepTime: 5, ingredients: [] }])}
+                className="text-brand-gold text-sm flex items-center gap-1 hover:scale-105 transition-transform">
+                <PlusCircle size={16} /> إضافة حجم
+              </button>
+            </div>
+            {variants.length > 0 && (
+              <div className="space-y-4">
+                {variants.map((v, vIdx) => (
+                  <div key={vIdx} className="bg-brand-black p-4 rounded-2xl border border-white/10 relative">
+                    <button type="button" onClick={() => setVariants(variants.filter((_, i) => i !== vIdx))} className="absolute top-4 left-4 text-red-500 bg-red-500/10 p-2 rounded-lg hover:bg-red-500/20"><Trash2 size={16}/></button>
+                    <div className="grid grid-cols-3 gap-3 mb-3 pr-10">
+                      <div>
+                        <label className="text-[10px] text-gray-500 block mb-1">اسم الحجم (مثال: S, كبير)</label>
+                        <input value={v.sizeName} onChange={e => { const nv = [...variants]; nv[vIdx].sizeName = e.target.value; setVariants(nv); }} className="field-input py-2 text-sm" placeholder="اسم الحجم" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-gray-500 block mb-1">السعر (د.ب)</label>
+                        <input type="number" value={v.price} onChange={e => { const nv = [...variants]; nv[vIdx].price = Number(e.target.value); setVariants(nv); }} className="field-input py-2 text-sm" />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-gray-500 block mb-1">وقت التحضير (د)</label>
+                        <input type="number" value={v.prepTime} onChange={e => { const nv = [...variants]; nv[vIdx].prepTime = Number(e.target.value); setVariants(nv); }} className="field-input py-2 text-sm" />
+                      </div>
+                    </div>
+                    
+                    {/* Variant Ingredients */}
+                    <div className="mt-4 pt-3 border-t border-white/5">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs text-brand-gold">مكونات هذا الحجم تحديداً:</span>
+                        <button type="button" onClick={() => { const nv = [...variants]; nv[vIdx].ingredients.push({ inventoryItemId: "", amountRequired: 0 }); setVariants(nv); }} className="text-[10px] text-brand-orange bg-brand-orange/10 px-2 py-1 rounded">
+                          + إضافة مكون
+                        </button>
+                      </div>
+                      {v.ingredients.map((ing: any, iIdx: number) => (
+                        <div key={iIdx} className="flex gap-2 items-end mb-2">
+                          <select value={ing.inventoryItemId} onChange={e => { const nv = [...variants]; nv[vIdx].ingredients[iIdx].inventoryItemId = e.target.value; setVariants(nv); }} className="flex-1 bg-brand-navy-light border border-white/5 rounded-lg p-2 text-xs">
+                            <option value="">اختر مادة...</option>
+                            {inventory.map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                          </select>
+                          <input type="number" value={ing.amountRequired} onChange={e => { const nv = [...variants]; nv[vIdx].ingredients[iIdx].amountRequired = Number(e.target.value); setVariants(nv); }} className="w-20 bg-brand-navy-light border border-white/5 rounded-lg p-2 text-xs" placeholder="الكمية" />
+                          <button type="button" onClick={() => { const nv = [...variants]; nv[vIdx].ingredients = nv[vIdx].ingredients.filter((_: any, i: number) => i !== iIdx); setVariants(nv); }} className="p-2 text-red-500"><X size={14}/></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Ingredients */}
@@ -394,7 +456,7 @@ function ProductModal({ product, categories, inventory, onClose, onSave }: any) 
           </div>
 
           <div className="flex gap-4 pt-4">
-            <button onClick={() => onSave({ ...form, ingredients })}
+            <button onClick={() => onSave({ ...form, ingredients, variants })}
               className="flex-1 bg-brand-orange py-4 rounded-2xl font-black text-xl shadow-lg">
               {product ? "حفظ التعديلات" : "إضافة الصنف"}
             </button>
