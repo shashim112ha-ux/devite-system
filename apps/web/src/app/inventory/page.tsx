@@ -20,6 +20,7 @@ import { motion, AnimatePresence } from "framer-motion";
 
 export default function SmartInventory() {
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showDamageModal, setShowDamageModal] = useState(false);
   const [view, setView] = useState<"stock" | "history" | "damaged">("stock");
   
   const inventoryQuery = trpc.getInventory.useQuery();
@@ -31,7 +32,11 @@ export default function SmartInventory() {
   const [editingItem, setEditingItem] = useState<any>(null);
 
   const lowStockItems = inventoryQuery.data?.filter(i => i.quantity <= i.minThreshold) || [];
-  const auditLogsQuery = trpc.getInventoryAuditLogs.useQuery(undefined, { enabled: view === 'history' });
+  const auditLogsQuery = trpc.getInventoryAuditLogs.useQuery(undefined, { enabled: view === 'history' || view === 'damaged' });
+
+  const displayedLogs = view === 'history' 
+    ? auditLogsQuery.data 
+    : auditLogsQuery.data?.filter(l => l.reason?.startsWith('إتلاف:'));
 
   return (
     <div className="min-h-screen bg-brand-black p-10">
@@ -49,10 +54,17 @@ export default function SmartInventory() {
               <Search size={18} />
               <span className="text-xs">بحث...</span>
            </button>
-           <button onClick={() => { setEditingItem(null); setShowAddModal(true); }} className="bg-brand-orange px-8 py-3 rounded-2xl font-bold flex items-center gap-2 shadow-xl shadow-brand-orange/20">
-              <Plus size={20} />
-              إضافة مادة
-           </button>
+           {view === 'damaged' ? (
+             <button onClick={() => setShowDamageModal(true)} className="bg-red-500 hover:bg-red-600 px-8 py-3 rounded-2xl font-bold flex items-center gap-2 shadow-xl shadow-red-500/20 transition-all text-white">
+                <AlertCircle size={20} />
+                الإبلاغ عن تلف
+             </button>
+           ) : (
+             <button onClick={() => { setEditingItem(null); setShowAddModal(true); }} className="bg-brand-orange px-8 py-3 rounded-2xl font-bold flex items-center gap-2 shadow-xl shadow-brand-orange/20">
+                <Plus size={20} />
+                إضافة مادة
+             </button>
+           )}
         </div>
       </header>
 
@@ -112,7 +124,7 @@ export default function SmartInventory() {
        </div>
        )}
 
-       {view === 'history' && (
+       {(view === 'history' || view === 'damaged') && (
          <div className="bg-brand-navy-light rounded-[40px] overflow-hidden border border-white/5">
             <table className="w-full text-right">
                <thead className="bg-white/5 text-gray-500 text-xs uppercase">
@@ -120,32 +132,26 @@ export default function SmartInventory() {
                      <th className="p-6">التاريخ</th>
                      <th className="p-6">المادة</th>
                      <th className="p-6">بواسطة</th>
-                     <th className="p-6">تغيير الكمية</th>
-                     <th className="p-6">تغيير السعر</th>
+                     <th className="p-6">{view === 'damaged' ? 'الكمية التالفة' : 'تغيير الكمية'}</th>
                      <th className="p-6">السبب</th>
                   </tr>
                </thead>
                <tbody className="divide-y divide-white/5">
-                  {auditLogsQuery.data?.map((log: any) => (
+                  {displayedLogs?.map((log: any) => (
                     <tr key={log.id} className="hover:bg-white/[0.02] transition-colors">
                        <td className="p-6 text-sm">{new Date(log.createdAt).toLocaleString('ar-SA')}</td>
                        <td className="p-6 font-bold">{log.inventoryItem?.name}</td>
                        <td className="p-6 text-sm text-gray-400">{log.userName}</td>
                        <td className="p-6" dir="ltr">
-                          <span className="text-gray-500">{log.oldQuantity}</span>
-                          <span className="mx-2">➔</span>
-                          <span className={log.newQuantity > log.oldQuantity ? 'text-green-500' : 'text-red-500'}>{log.newQuantity}</span>
-                       </td>
-                       <td className="p-6" dir="ltr">
-                          <span className="text-gray-500">{log.oldPrice}</span>
-                          <span className="mx-2">➔</span>
-                          <span className={log.newPrice !== log.oldPrice ? 'text-brand-orange' : 'text-gray-500'}>{log.newPrice}</span>
+                          <span className={log.newQuantity > log.oldQuantity ? 'text-green-500' : 'text-red-500 font-bold'}>
+                             {Math.abs(log.newQuantity - log.oldQuantity).toFixed(2)}
+                          </span>
                        </td>
                        <td className="p-6 text-sm text-brand-gold">{log.reason || '-'}</td>
                     </tr>
                   ))}
-                  {auditLogsQuery.data?.length === 0 && (
-                     <tr><td colSpan={6} className="p-10 text-center text-gray-500">لا توجد سجلات تعديل حتى الآن.</td></tr>
+                  {displayedLogs?.length === 0 && (
+                     <tr><td colSpan={5} className="p-10 text-center text-gray-500">لا توجد سجلات.</td></tr>
                   )}
                </tbody>
             </table>
@@ -181,6 +187,20 @@ export default function SmartInventory() {
               } catch (e: any) {
                 alert(`خطأ في الحذف: ${e.message}`);
               }
+            }
+          }}
+        />}
+        {showDamageModal && <ReportDamageModal
+          inventory={inventoryQuery.data || []}
+          onClose={() => setShowDamageModal(false)}
+          onSubmit={async (data: any) => {
+            try {
+              await reportDamagedMutation.mutateAsync(data);
+              inventoryQuery.refetch();
+              if (view === 'history' || view === 'damaged') auditLogsQuery.refetch();
+              setShowDamageModal(false);
+            } catch (e: any) {
+              alert(`خطأ: ${e.message}`);
             }
           }}
         />}
@@ -248,111 +268,73 @@ function AddInventoryModal({ onClose, onAdd, onDelete, initialData }: any) {
 
 function InventoryKPI({ title, value, icon, color }: any) {
   const colors: any = {
-    gold: "text-brand-gold bg-brand-gold/10",
-    red: "text-red-500 bg-red-500/10",
-    orange: "text-brand-orange bg-brand-orange/10",
+    gold: "text-brand-gold bg-brand-gold/10 border-brand-gold/20",
+    red: "text-red-500 bg-red-500/10 border-red-500/20",
+    orange: "text-brand-orange bg-brand-orange/10 border-brand-orange/20"
   };
+
   return (
-    <div className="bg-brand-navy-light p-8 rounded-[35px] border border-white/5 flex items-center gap-6">
-       <div className={`p-4 rounded-2xl ${colors[color]}`}>{icon}</div>
-       <div>
-          <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">{title}</p>
-          <h3 className="text-3xl font-black">{value}</h3>
-       </div>
+    <div className="bg-brand-navy-light p-6 rounded-[30px] border border-white/5 flex items-center justify-between">
+      <div>
+        <p className="text-xs text-gray-400 mb-2">{title}</p>
+        <p className="text-3xl font-black">{value}</p>
+      </div>
+      <div className={`p-4 rounded-2xl border ${colors[color]}`}>
+        {icon}
+      </div>
     </div>
   );
 }
 
-function DamagedInventoryTab({ inventoryItems, onSubmit }: { inventoryItems: any[], onSubmit: (data: any) => void }) {
+function ReportDamageModal({ inventory, onClose, onSubmit }: any) {
   const [formData, setFormData] = useState({
     inventoryItemId: '',
     quantity: '',
-    reason: '',
-    notes: ''
+    reason: ''
   });
 
+  const selectedItem = inventory.find((i: any) => i.id === formData.inventoryItemId);
+
   return (
-    <div className="bg-brand-navy-light p-10 rounded-[40px] border border-white/5 max-w-3xl mx-auto shadow-2xl">
-      <div className="mb-8">
-        <h2 className="text-2xl font-black text-brand-gold mb-2 flex items-center gap-2">
-          <AlertCircle /> تسجيل عنصر تالف (متلفات)
-        </h2>
-        <p className="text-gray-400 text-sm">سيتم خصم الكمية من المخزون فوراً وتسجيل تكلفتها كخسائر مالية تلقائياً في حساب المصروفات.</p>
-      </div>
-
-      <div className="space-y-6">
-        <div className="space-y-2">
-          <label className="text-sm font-bold text-gray-400">اختر المادة من المخزون</label>
-          <select 
-            className="w-full bg-brand-black border border-white/10 p-4 rounded-xl focus:border-brand-orange"
-            value={formData.inventoryItemId}
-            onChange={e => setFormData({ ...formData, inventoryItemId: e.target.value })}
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+      <div className="bg-brand-navy-light p-8 rounded-[40px] w-full max-w-md border border-white/10 shadow-2xl">
+        <div className="flex justify-between items-center mb-6">
+           <h2 className="text-2xl font-black text-red-500 flex items-center gap-2"><AlertCircle /> الإبلاغ عن تلف</h2>
+        </div>
+        <div className="space-y-4">
+          <div>
+             <label className="text-sm text-gray-400 mb-2 block">المادة التالفة</label>
+             <select value={formData.inventoryItemId} onChange={e => setFormData({...formData, inventoryItemId: e.target.value})} className="w-full bg-brand-black p-4 rounded-xl border border-white/5">
+                <option value="">اختر المادة...</option>
+                {inventory.map((i: any) => <option key={i.id} value={i.id}>{i.name} (المتوفر: {i.quantity} {i.unit})</option>)}
+             </select>
+          </div>
+          <div>
+             <label className="text-sm text-gray-400 mb-2 block">الكمية التالفة {selectedItem && `(${selectedItem.unit})`}</label>
+             <input type="number" placeholder="مثال: 5" className="w-full bg-brand-black p-4 rounded-xl border border-white/5" value={formData.quantity} onChange={e => setFormData({...formData, quantity: e.target.value})} />
+          </div>
+          <div>
+             <label className="text-sm text-gray-400 mb-2 block">السبب (مثال: انتهاء صلاحية، كسر)</label>
+             <input placeholder="السبب..." className="w-full bg-brand-black p-4 rounded-xl border border-white/5" value={formData.reason} onChange={e => setFormData({...formData, reason: e.target.value})} />
+          </div>
+          
+          {selectedItem && formData.quantity && Number(formData.quantity) > 0 && (
+            <div className="bg-red-500/10 p-4 rounded-xl border border-red-500/20 text-red-500 text-sm font-bold">
+               ستنخفض هذه الكمية من المخزون وسيتم تسجيل خسارة مالية بقيمة: {((Number(formData.quantity) * selectedItem.unitPrice) || 0).toFixed(3)} د.ب في المصروفات.
+            </div>
+          )}
+        </div>
+        <div className="flex gap-4 mt-8">
+          <button 
+             onClick={() => onSubmit({ ...formData, quantity: Number(formData.quantity) })} 
+             disabled={!formData.inventoryItemId || !formData.quantity || !formData.reason}
+             className="flex-1 bg-red-500 py-4 rounded-xl font-bold text-white disabled:opacity-50"
           >
-            <option value="">-- اختر المادة --</option>
-            {inventoryItems.map(item => (
-              <option key={item.id} value={item.id}>{item.name} (المتوفر: {item.quantity} {item.unit})</option>
-            ))}
-          </select>
+             اعتماد وإبلاغ
+          </button>
+          <button onClick={onClose} className="flex-1 bg-white/10 py-4 rounded-xl font-bold">إلغاء</button>
         </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-bold text-gray-400">الكمية التالفة</label>
-          <input 
-            type="number" 
-            step="0.01"
-            placeholder="مثال: 2.5" 
-            className="w-full bg-brand-black border border-white/10 p-4 rounded-xl focus:border-brand-orange"
-            value={formData.quantity}
-            onChange={e => setFormData({ ...formData, quantity: e.target.value })}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-bold text-gray-400">سبب الإتلاف الرئيسي</label>
-          <select 
-            className="w-full bg-brand-black border border-white/10 p-4 rounded-xl focus:border-brand-orange"
-            value={formData.reason}
-            onChange={e => setFormData({ ...formData, reason: e.target.value })}
-          >
-            <option value="">-- حدد السبب --</option>
-            <option value="انتهاء صلاحية">انتهاء صلاحية</option>
-            <option value="تلف أثناء التحضير">تلف أثناء التحضير</option>
-            <option value="سوء تخزين">سوء تخزين</option>
-            <option value="انسكاب/كسر">انسكاب / كسر</option>
-            <option value="أخرى">أخرى</option>
-          </select>
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-bold text-gray-400">ملاحظات إضافية (اختياري)</label>
-          <textarea 
-            placeholder="اكتب أي ملاحظات أو تفاصيل عن سبب التلف..."
-            className="w-full bg-brand-black border border-white/10 p-4 rounded-xl focus:border-brand-orange min-h-[100px]"
-            value={formData.notes}
-            onChange={e => setFormData({ ...formData, notes: e.target.value })}
-          />
-        </div>
-
-        <button 
-          onClick={() => {
-            if (!formData.inventoryItemId || !formData.quantity || !formData.reason) {
-              alert("يرجى تعبئة جميع الحقول المطلوبة (المادة، الكمية، والسبب).");
-              return;
-            }
-            onSubmit({
-              inventoryItemId: formData.inventoryItemId,
-              quantity: Number(formData.quantity),
-              reason: formData.reason,
-              notes: formData.notes
-            });
-            setFormData({ inventoryItemId: '', quantity: '', reason: '', notes: '' });
-          }}
-          className="w-full bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 py-4 rounded-xl font-bold transition-all shadow-lg flex items-center justify-center gap-2"
-        >
-          <AlertCircle size={20} />
-          اعتماد التالف وخصم الكمية
-        </button>
       </div>
-    </div>
+    </motion.div>
   );
 }
