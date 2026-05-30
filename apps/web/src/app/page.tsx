@@ -62,24 +62,42 @@ export default function CustomerHome() {
     );
   }
 
-  const addToCart = (product: any, options: any) => {
-    setCart([...cart, { ...product, ...options, quantity: 1 }]);
+  const handleAdd = (product: any, options: any) => {
+    let finalPrice = Number(product.price);
+    if (options.variantId && product.variants) {
+      const v = product.variants.find((v: any) => v.id === options.variantId);
+      if (v) finalPrice = v.price;
+    } else {
+      if (options.size === "كبير") finalPrice += 0.5;
+      if (options.size === "صغير") finalPrice -= 0.2;
+    }
+
+    setCart([...cart, {
+      cartItemId: `${product.id}-${options.variantId}-${options.size}-${options.sugar}-${options.ice}-${options.notes}`,
+      id: product.id,
+      variantId: options.variantId,
+      name: product.name,
+      price: finalPrice,
+      ...options,
+      quantity: 1
+    }]);
     setSelectedProduct(null);
   };
 
   const total = cart.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0);
 
   const handleFinalOrder = async () => {
-    if (!phone || !customerName) {
-      alert("يرجى إدخال الاسم ورقم الهاتف");
+    if (!phone) {
+      alert("يرجى إدخال رقم الهاتف للمتابعة");
       return;
     }
     try {
       const order = await createOrderMutation.mutateAsync({
         customerPhone: phone,
-        customerName: customerName,
+        customerName: customerName || undefined,
         items: cart.map(item => ({
           productId: item.id,
+          variantId: item.variantId || undefined,
           quantity: item.quantity,
           price: Number(item.price),
           size: item.size,
@@ -93,8 +111,8 @@ export default function CustomerHome() {
       alert(`تم اعتماد طلبك بنجاح! رقم الطلب: #${order.orderNumber}. الوقت المتوقع: ${order.estimatedTime} دقيقة`);
       setCart([]);
       setIsCheckout(false);
-    } catch (error) {
-      alert("حدث خطأ في معالجة الطلب");
+    } catch (error: any) {
+      alert(error.message || "حدث خطأ في معالجة الطلب. يرجى التأكد من توفر جميع البيانات والاتصال.");
     }
   };
 
@@ -184,7 +202,7 @@ export default function CustomerHome() {
           <ProductDetailsModal 
             product={selectedProduct} 
             onClose={() => setSelectedProduct(null)} 
-            onAdd={addToCart}
+            onAdd={handleAdd}
           />
         )}
       </AnimatePresence>
@@ -273,6 +291,7 @@ function NavIcon({ icon, label, active, href }: any) {
 
 function ProductDetailsModal({ product, onClose, onAdd }: any) {
   const [size, setSize] = useState(product.sizes?.length > 0 ? product.sizes[0] : "-");
+  const [variantId, setVariantId] = useState(product.variants?.length > 0 ? product.variants[0].id : "");
   const [sugar, setSugar] = useState(product.sugarLevels?.length > 0 ? product.sugarLevels[0] : "-");
   const [ice, setIce] = useState(product.iceLevels?.length > 0 ? product.iceLevels[0] : "-");
   const [notes, setNotes] = useState("");
@@ -292,12 +311,32 @@ function ProductDetailsModal({ product, onClose, onAdd }: any) {
       </div>
       <div className="flex-1 bg-brand-black rounded-t-[50px] -mt-12 p-10 overflow-y-auto relative z-20">
         <h2 className="text-3xl font-black mb-2">{product.name}</h2>
-        <p className="text-brand-gold text-2xl font-black mb-6">{product.price} د.ب</p>
-        <p className="text-gray-500 text-sm leading-relaxed mb-8">{product.description || "معد من أفضل المكونات الطازجة."}</p>
+        <p className="text-brand-gold text-2xl font-black mb-6">
+          {variantId && product.variants?.length > 0 
+            ? `${product.variants.find((v: any) => v.id === variantId)?.price} د.ب` 
+            : `${product.price} د.ب`}
+        </p>
+        <p className="text-gray-500 text-sm leading-relaxed mb-8">{product.description || "لا يوجد وصف متوفر لهذا المشروب."}</p>
 
-        {product.sizes && product.sizes.length > 0 && (
-          <OptionGroup label="الحجم" options={product.sizes} value={size} onChange={setSize} />
-        )}
+        {product.variants && product.variants.length > 0 ? (
+          <div className="mb-4">
+            <label className="text-xs text-brand-gold font-bold block mb-3">خيارات الصنف</label>
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+              {product.variants.map((v: any) => (
+                <button 
+                  key={v.id} 
+                  onClick={() => { setVariantId(v.id); setSize(v.sizeName); }}
+                  className={`px-5 py-3 rounded-2xl text-sm font-bold whitespace-nowrap transition-all ${variantId === v.id ? 'bg-brand-orange text-black' : 'bg-brand-black border border-white/5 text-gray-400'}`}
+                >
+                  {v.sizeName}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : product.sizes && product.sizes.length > 0 ? (
+          <OptionGroup label="الحجم" options={product.sizes} value={size} onChange={(val: string) => { setSize(val); setVariantId(""); }} />
+        ) : null}
+
         {product.sugarLevels && product.sugarLevels.length > 0 && (
           <OptionGroup label="السكر" options={product.sugarLevels} value={sugar} onChange={setSugar} />
         )}
@@ -316,7 +355,7 @@ function ProductDetailsModal({ product, onClose, onAdd }: any) {
         </div>
 
         <button 
-          onClick={() => onAdd(product, { size, sugar, ice, notes })}
+          onClick={() => onAdd(product, { size, variantId, sugar, ice, notes })}
           className="w-full bg-brand-orange py-5 rounded-[25px] font-black text-xl shadow-2xl shadow-brand-orange/20"
         >
           إضافة للطلب
