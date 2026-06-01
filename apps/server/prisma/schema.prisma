@@ -100,7 +100,7 @@ model Product {
 model ProductVariant {
   id              String   @id @default(cuid())
   productId       String
-  product         Product  @relation(fields: [productId], references: [id])
+  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   sizeName        String   // small, medium, large
   price           Float
   manualCost      Float    @default(0)
@@ -114,7 +114,7 @@ model ProductVariant {
 model ProductVariantIngredient {
   id              String   @id @default(cuid())
   variantId       String
-  variant         ProductVariant @relation(fields: [variantId], references: [id])
+  variant         ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
   inventoryItemId String
   inventoryItem   InventoryItem  @relation(fields: [inventoryItemId], references: [id])
   amountRequired  Float
@@ -173,7 +173,7 @@ model ProductIngredient {
   productId       String
   inventoryItemId String
   amountRequired  Float
-  product         Product       @relation(fields: [productId], references: [id])
+  product         Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
   inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
 }
 
