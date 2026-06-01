@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "../utils/trpc";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -21,6 +21,20 @@ import { MessageCircle } from "lucide-react";
 
 export default function ReportsPage() {
   const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'quarterly'>('daily');
+  const [userRole, setUserRole] = useState("ADMIN");
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+       const storedRole = localStorage.getItem('userRole');
+       if (storedRole) {
+          setUserRole(storedRole);
+          if (storedRole === 'INVESTOR' || storedRole === 'INVESTOR_STAFF') {
+             setPeriod('monthly');
+          }
+       }
+    }
+  }, []);
+
   const reportQuery = trpc.getReportData.useQuery({ period });
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -92,7 +106,10 @@ export default function ReportsPage() {
 
       <div ref={printRef} className="print:text-black">
         <div className="flex gap-4 mb-8 print:hidden">
-          {['daily', 'weekly', 'monthly', 'quarterly'].map((p) => (
+          {['daily', 'weekly', 'monthly', 'quarterly'].filter(p => {
+             if ((userRole === 'INVESTOR' || userRole === 'INVESTOR_STAFF') && (p === 'daily' || p === 'weekly')) return false;
+             return true;
+          }).map((p) => (
             <button
               key={p}
               onClick={() => setPeriod(p as any)}
