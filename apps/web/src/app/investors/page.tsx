@@ -16,12 +16,9 @@ export default function InvestorsPage() {
   
   useEffect(() => {
     if (typeof window !== 'undefined') {
-       const userStr = localStorage.getItem('user');
-       if (userStr) {
-          try {
-             const user = JSON.parse(userStr);
-             setUserRole(user.role);
-          } catch(e) {}
+       const storedRole = localStorage.getItem('userRole');
+       if (storedRole) {
+          setUserRole(storedRole);
        }
     }
   }, []);
@@ -273,9 +270,9 @@ export default function InvestorsPage() {
                     <tbody className="divide-y divide-white/5">
                        {payouts.map((p: any) => (
                           <tr key={p.id} className="hover:bg-white/[0.02] transition-colors">
-                             <td className="py-4">{new Date(p.createdAt).toLocaleDateString('ar-SA')}</td>
-                             <td className="py-4">{p.profitPeriod || '-'}</td>
-                             <td className="py-4 font-black text-lg text-brand-gold">{p.amount} د.ب</td>
+                             <td className="py-4">{new Date(p.date || p.createdAt || Date.now()).toLocaleDateString('ar-SA')}</td>
+                             <td className="py-4">توزيع دوري</td>
+                             <td className="py-4 font-black text-lg text-brand-gold">{p.amountPaid?.toFixed(3) || "0.000"} د.ب</td>
                           </tr>
                        ))}
                     </tbody>
