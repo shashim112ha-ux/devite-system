@@ -249,7 +249,7 @@ export default function StaffManagement() {
                  </div>
                  <div className="grid grid-cols-2 gap-6">
                     <Select label="حالة الحساب" value={formData.active ? 'نشط' : 'غير نشط'} options={['نشط', 'غير نشط']} onChange={v => setFormData({...formData, active: v === 'نشط'})} />
-                    <Select label="الدور/الوظيفة" value={formData.role} options={['STAFF', 'MANAGER', 'SUPERVISOR', 'CASHIER', 'KITCHEN', 'DELIVERY', 'ACCOUNTANT', 'INVESTOR_STAFF']} onChange={(v: string) => setFormData({...formData, role: v})} />
+                    <Select label="الدور/الوظيفة" value={formData.role} options={['STAFF', 'MANAGER', 'SUPERVISOR', 'CASHIER', 'KITCHEN', 'DELIVERY', 'ACCOUNTANT', 'INVESTOR_STAFF', 'INVESTOR']} onChange={(v: string) => setFormData({...formData, role: v})} />
                  </div>
                  <div className="grid grid-cols-2 gap-6">
                     <Input label="الراتب الأساسي (د.ب)" type="number" value={formData.salary} onChange={v => setFormData({...formData, salary: v})} />
