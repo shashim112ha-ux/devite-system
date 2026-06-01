@@ -213,13 +213,30 @@ export default function ProductsPage() {
             inventory={inventoryQuery.data ?? []}
             onClose={() => setShowProductModal(false)}
             onSave={async (data: any) => {
-              if (editingProduct) {
-                await updateProductMutation.mutateAsync({ id: editingProduct.id, ...data });
-              } else {
-                await createProductMutation.mutateAsync(data);
+              try {
+                // Filter out empty ingredients
+                const cleanedIngredients = data.ingredients?.filter((i:any) => i.inventoryItemId !== "");
+                const cleanedVariants = data.variants?.map((v:any) => ({
+                   ...v,
+                   ingredients: v.ingredients?.filter((i:any) => i.inventoryItemId !== "") || []
+                }));
+
+                const payload = {
+                  ...data,
+                  ingredients: cleanedIngredients,
+                  variants: cleanedVariants
+                };
+
+                if (editingProduct) {
+                  await updateProductMutation.mutateAsync({ id: editingProduct.id, ...payload });
+                } else {
+                  await createProductMutation.mutateAsync(payload);
+                }
+                setShowProductModal(false);
+                refetchAll();
+              } catch (e: any) {
+                alert(`خطأ في الحفظ: ${e.message}`);
               }
-              setShowProductModal(false);
-              refetchAll();
             }}
           />
         )}
@@ -232,13 +249,17 @@ export default function ProductsPage() {
             category={editingCategory}
             onClose={() => setShowCategoryModal(false)}
             onSave={async (name: string) => {
-              if (editingCategory) {
-                await updateCategoryMutation.mutateAsync({ id: editingCategory.id, name });
-              } else {
-                await addCategoryMutation.mutateAsync({ name });
+              try {
+                if (editingCategory) {
+                  await updateCategoryMutation.mutateAsync({ id: editingCategory.id, name });
+                } else {
+                  await addCategoryMutation.mutateAsync({ name });
+                }
+                setShowCategoryModal(false);
+                refetchAll();
+              } catch (e: any) {
+                alert(`خطأ في الحفظ: ${e.message}`);
               }
-              setShowCategoryModal(false);
-              refetchAll();
             }}
           />
         )}
