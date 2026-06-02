@@ -542,8 +542,32 @@ export const appRouter = router({
           }
         }
 
-        io?.emit('order_created', order);
-        return order;
+          // 6. Update Account Balances based on Payment Method
+          const paymentType = input.paymentMethod === 'CASH' ? 'CASH' : 'CARD'; // Default others to CARD
+          let account = await tx.account.findFirst({
+            where: { type: paymentType, isActive: true },
+            orderBy: { createdAt: 'asc' }
+          });
+          
+          if (!account) {
+             const accountName = paymentType === 'CASH' ? 'صندوق الكاش الافتراضي' : 'حساب البنك الافتراضي';
+             account = await tx.account.create({
+                data: {
+                   name: accountName,
+                   type: paymentType,
+                   balance: 0,
+                   isActive: true
+                }
+             });
+          }
+          
+          await tx.account.update({
+             where: { id: account.id },
+             data: { balance: { increment: input.total } }
+          });
+
+          io?.emit('order_created', order);
+          return order;
       }, {
         maxWait: 10000, // 10s
         timeout: 30000  // 30s
