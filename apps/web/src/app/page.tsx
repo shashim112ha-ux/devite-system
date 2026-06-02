@@ -31,6 +31,7 @@ export default function CustomerHome() {
   const [isCheckout, setIsCheckout] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [customerName, setCustomerName] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("CASH");
 
   const productsQuery = trpc.getProducts.useQuery();
   const categoriesQuery = trpc.getCategories.useQuery();
@@ -106,7 +107,7 @@ export default function CustomerHome() {
           ice: item.ice,
           notes: item.notes
         })),
-        paymentMethod: 'CASH',
+        paymentMethod: paymentMethod,
         total: total,
       });
       alert(`تم اعتماد طلبك بنجاح! رقم الطلب: #${order.orderNumber}. الوقت المتوقع: ${order.estimatedTime} دقيقة`);
@@ -222,6 +223,8 @@ export default function CustomerHome() {
             setPhone={setPhone}
             customerName={customerName}
             setCustomerName={setCustomerName}
+            paymentMethod={paymentMethod}
+            setPaymentMethod={setPaymentMethod}
           />
         )}
       </AnimatePresence>
@@ -387,7 +390,7 @@ function OptionGroup({ label, options, value, onChange }: any) {
   );
 }
 
-function CheckoutOverlay({ cart, total, onClose, onConfirm, phone, setPhone, customerName, setCustomerName }: any) {
+function CheckoutOverlay({ cart, total, onClose, onConfirm, phone, setPhone, customerName, setCustomerName, paymentMethod, setPaymentMethod }: any) {
   return (
     <motion.div 
       initial={{ x: "100%" }}
@@ -447,6 +450,24 @@ function CheckoutOverlay({ cart, total, onClose, onConfirm, phone, setPhone, cus
             placeholder="رقم الهاتف" 
             className="w-full bg-brand-navy-light border border-white/5 rounded-2xl p-4 text-sm outline-none text-left" 
            />
+        </div>
+
+        <div className="space-y-4 pt-6">
+           <h3 className="text-brand-gold font-bold text-sm mr-2">طريقة الدفع</h3>
+           <div className="flex gap-4">
+             <button 
+               onClick={() => setPaymentMethod('CASH')}
+               className={`flex-1 p-4 rounded-2xl font-bold border transition-all ${paymentMethod === 'CASH' ? 'border-brand-orange bg-brand-orange/10 text-brand-orange' : 'border-white/5 bg-brand-navy-light text-gray-500'}`}
+             >
+               دفع كاش
+             </button>
+             <button 
+               onClick={() => setPaymentMethod('CARD')}
+               className={`flex-1 p-4 rounded-2xl font-bold border transition-all ${paymentMethod === 'CARD' ? 'border-brand-orange bg-brand-orange/10 text-brand-orange' : 'border-white/5 bg-brand-navy-light text-gray-500'}`}
+             >
+               دفع بالبطاقة
+             </button>
+           </div>
         </div>
       </div>
 
