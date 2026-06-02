@@ -35,7 +35,15 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [queryClient] = useState(() => new QueryClient());
+  const [queryClient] = useState(() => new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 60 * 1000, // 1 minute caching
+        refetchOnWindowFocus: false, // Don't refetch on tab switch
+        retry: 1
+      },
+    },
+  }));
   const [trpcClient] = useState(() =>
     trpc.createClient({
       links: [

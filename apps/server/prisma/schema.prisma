@@ -203,6 +203,10 @@ model Order {
   
   branchId      String?
   branch        BranchLocation? @relation(fields: [branchId], references: [id])
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([isUrgent])
 }
 
 model OrderItem {
@@ -273,6 +277,9 @@ model Expense {
   
   branchId        String?
   branch          BranchLocation? @relation(fields: [branchId], references: [id])
+
+  @@index([date])
+  @@index([category])
 }
 
 model Notification {
