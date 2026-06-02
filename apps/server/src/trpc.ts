@@ -61,8 +61,7 @@ export const requireRoles = (roles: string[]) => {
 
 export const adminProcedure = t.procedure.use(isAuthed).use(requireRoles(['ADMIN']));
 export const managerProcedure = t.procedure.use(isAuthed).use(requireRoles(['ADMIN', 'MANAGER']));
-export const cashierProcedure = t.procedure.use(isAuthed).use(requireRoles(['ADMIN', 'MANAGER', 'CASHIER']));
-export const kitchenProcedure = t.procedure.use(isAuthed).use(requireRoles(['ADMIN', 'MANAGER', 'KITCHEN']));
+export const cashierProcedure = t.procedure.use(isAuthed).use(requireRoles(['ADMIN', 'MANAGER', 'CASHIER', 'STAFF', 'INVESTOR_STAFF']));
+export const kitchenProcedure = t.procedure.use(isAuthed).use(requireRoles(['ADMIN', 'MANAGER', 'KITCHEN', 'STAFF', 'INVESTOR_STAFF', 'CASHIER']));
 export const staffProcedure = t.procedure.use(isAuthed).use(requireRoles(['ADMIN', 'MANAGER', 'STAFF', 'CASHIER', 'KITCHEN', 'INVESTOR_STAFF']));
 export const investorProcedure = t.procedure.use(isAuthed).use(requireRoles(['ADMIN', 'MANAGER', 'INVESTOR', 'INVESTOR_STAFF']));
-
