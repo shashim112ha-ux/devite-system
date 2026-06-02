@@ -113,6 +113,18 @@ function AddOfferModal({ onClose, onAdd }: any) {
     imageUrl: ''
   });
 
+  const handleSubmit = () => {
+    if (!formData.title || !formData.price || !formData.endDate) {
+      alert("يرجى تعبئة الحقول الأساسية (العنوان، السعر، تاريخ الانتهاء)");
+      return;
+    }
+    onAdd({
+      ...formData,
+      startDate: formData.startDate ? new Date(formData.startDate) : new Date(),
+      endDate: new Date(formData.endDate)
+    });
+  };
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
       <div className="bg-brand-navy-light p-10 rounded-[40px] w-full max-w-lg border border-white/10 shadow-2xl">
@@ -167,7 +179,7 @@ function AddOfferModal({ onClose, onAdd }: any) {
         </div>
         
         <div className="flex gap-4 mt-8">
-          <button onClick={() => onAdd({ ...formData, startDate: new Date(formData.startDate), endDate: new Date(formData.endDate) })} className="flex-1 bg-brand-orange py-4 rounded-xl font-bold">إطلاق العرض</button>
+          <button onClick={handleSubmit} className="flex-1 bg-brand-orange py-4 rounded-xl font-bold">إضافة العرض</button>
           <button onClick={onClose} className="flex-1 bg-white/10 py-4 rounded-xl font-bold">إلغاء</button>
         </div>
       </div>

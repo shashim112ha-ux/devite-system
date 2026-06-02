@@ -315,7 +315,7 @@ export const appRouter = router({
   }),
 
   createOffer: managerProcedure
-    .input(z.object({ title: z.string(), description: z.string().optional(), price: z.number(), oldPrice: z.number().optional(), discount: z.number().optional(), startDate: z.date().optional(), endDate: z.date(), type: z.string().optional(), imageUrl: z.string().optional() }))
+    .input(z.object({ title: z.string(), description: z.string().optional(), price: z.number(), oldPrice: z.number().optional(), discount: z.number().optional(), startDate: z.coerce.date().optional(), endDate: z.coerce.date(), type: z.string().optional(), imageUrl: z.string().optional() }))
     .mutation(async ({ input, ctx }) => {
       const offer = await ctx.prisma.offer.create({ data: input as any });
       await logAudit(ctx.prisma, ctx.user.id, 'CREATE_OFFER', `إنشاء عرض ترويجي: ${offer.title}`);
