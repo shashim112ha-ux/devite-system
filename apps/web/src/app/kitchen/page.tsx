@@ -10,7 +10,8 @@ import {
   AlertCircle,
   Timer,
   ChevronRight,
-  Flame
+  Flame,
+  Trash2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { io } from "socket.io-client";
@@ -98,6 +99,13 @@ export default function ProfessionalKitchen() {
     ordersQuery.refetch();
   };
 
+  const handleCancelOrder = async (order: any) => {
+    if (confirm(`هل أنت متأكد من إلغاء الطلب رقم #${order.orderNumber} وإرجاع المبلغ للحافظة والمواد للمخزون؟`)) {
+      await updateStatusMutation.mutateAsync({ orderId: order.id, status: 'CANCELLED' });
+      ordersQuery.refetch();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-brand-black flex flex-col font-sans">
       <header className="p-8 bg-brand-navy border-b border-white/5 flex justify-between items-center print:hidden">
@@ -126,7 +134,7 @@ export default function ProfessionalKitchen() {
           <div className="space-y-6 flex-1 overflow-y-auto max-h-[70vh] pr-1">
             <AnimatePresence>
               {ordersQuery.data?.filter(o => o.status === 'NEW').map((order) => (
-                <KitchenOrderCard key={order.id} order={order} onUpdate={() => handleStatusUpdate(order)} />
+                <KitchenOrderCard key={order.id} order={order} onUpdate={() => handleStatusUpdate(order)} onCancel={() => handleCancelOrder(order)} />
               ))}
             </AnimatePresence>
           </div>
@@ -140,7 +148,7 @@ export default function ProfessionalKitchen() {
           <div className="space-y-6 flex-1 overflow-y-auto max-h-[70vh] pr-1">
             <AnimatePresence>
               {ordersQuery.data?.filter(o => o.status === 'PREPARING').map((order) => (
-                <KitchenOrderCard key={order.id} order={order} onUpdate={() => handleStatusUpdate(order)} />
+                <KitchenOrderCard key={order.id} order={order} onUpdate={() => handleStatusUpdate(order)} onCancel={() => handleCancelOrder(order)} />
               ))}
             </AnimatePresence>
           </div>
@@ -154,7 +162,7 @@ export default function ProfessionalKitchen() {
           <div className="space-y-6 flex-1 overflow-y-auto max-h-[70vh] pr-1">
             <AnimatePresence>
               {ordersQuery.data?.filter(o => o.status === 'READY').map((order) => (
-                <KitchenOrderCard key={order.id} order={order} onUpdate={() => handleStatusUpdate(order)} />
+                <KitchenOrderCard key={order.id} order={order} onUpdate={() => handleStatusUpdate(order)} onCancel={() => handleCancelOrder(order)} />
               ))}
             </AnimatePresence>
           </div>
@@ -165,7 +173,7 @@ export default function ProfessionalKitchen() {
   );
 }
 
-function KitchenOrderCard({ order, onUpdate }: any) {
+function KitchenOrderCard({ order, onUpdate, onCancel }: any) {
   const [elapsed, setElapsed] = useState(0);
   
   useEffect(() => {
@@ -230,16 +238,27 @@ function KitchenOrderCard({ order, onUpdate }: any) {
           <div className="text-xs text-gray-500 flex items-center gap-1">
              <Clock size={12} /> {(order.prepTime || 10)} دقيقة
           </div>
-          <button 
-            onClick={onUpdate}
-            className={`px-6 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition-all ${
-              order.status === 'NEW' ? 'bg-brand-orange text-black shadow-lg shadow-brand-orange/20' :
-              order.status === 'PREPARING' ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' :
-              'bg-brand-navy-light text-white'
-            }`}
-          >
-            {order.status === 'NEW' ? 'بدء التحضير' : order.status === 'PREPARING' ? 'جاهز للتسليم' : 'تم التسليم'} <ChevronRight size={16} />
-          </button>
+          <div className="flex gap-2">
+            {(order.status === 'NEW' || order.status === 'PREPARING') && (
+              <button 
+                onClick={onCancel}
+                className="px-4 py-2.5 rounded-xl font-bold text-sm bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all flex items-center gap-2 border border-red-500/20"
+                title="إلغاء الطلب وإرجاع المبلغ"
+              >
+                <Trash2 size={16} /> حذف
+              </button>
+            )}
+            <button 
+              onClick={onUpdate}
+              className={`px-6 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition-all ${
+                order.status === 'NEW' ? 'bg-brand-orange text-black shadow-lg shadow-brand-orange/20' :
+                order.status === 'PREPARING' ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' :
+                'bg-brand-navy-light text-white'
+              }`}
+            >
+              {order.status === 'NEW' ? 'بدء التحضير' : order.status === 'PREPARING' ? 'الطلب جاهز' : 'تم التسليم'} <ChevronRight size={16} />
+            </button>
+          </div>
         </div>
       </div>
     </motion.div>

@@ -346,35 +346,77 @@ export const appRouter = router({
   updateOrderStatus: kitchenProcedure
     .input(z.object({ orderId: z.string(), status: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      const order = await ctx.prisma.order.update({
-        where: { id: input.orderId },
-        data: { status: input.status },
-        include: { items: { include: { product: true } }, customer: true }
-      });
-      
-      // Track timeline step
-      const latestStep = await ctx.prisma.orderTimelineStep.findFirst({
-        where: { orderId: input.orderId },
-        orderBy: { timestamp: 'desc' }
-      });
-      
-      const now = new Date();
-      const durationSeconds = latestStep 
-        ? Math.round((now.getTime() - latestStep.timestamp.getTime()) / 1000)
-        : 0;
+      return ctx.prisma.$transaction(async (tx) => {
+        const order = await tx.order.update({
+          where: { id: input.orderId },
+          data: { status: input.status },
+          include: { items: { include: { product: true } }, customer: true }
+        });
+        
+        const latestStep = await tx.orderTimelineStep.findFirst({
+          where: { orderId: input.orderId },
+          orderBy: { timestamp: 'desc' }
+        });
+        
+        const now = new Date();
+        const durationSeconds = latestStep 
+          ? Math.round((now.getTime() - latestStep.timestamp.getTime()) / 1000)
+          : 0;
 
-      await ctx.prisma.orderTimelineStep.create({
-        data: {
-          orderId: input.orderId,
-          stage: input.status,
-          staffId: ctx.user?.id,
-          durationSeconds: durationSeconds
+        await tx.orderTimelineStep.create({
+          data: {
+            orderId: input.orderId,
+            stage: input.status,
+            staffId: ctx.user?.id,
+            durationSeconds: durationSeconds
+          }
+        });
+
+        if (input.status === 'CANCELLED') {
+          const paymentType = order.paymentMethod === 'CASH' ? 'CASH' : 'CARD';
+          const account = await tx.account.findFirst({
+            where: { type: paymentType, isActive: true },
+            orderBy: { createdAt: 'asc' }
+          });
+          
+          if (account) {
+             await tx.account.update({
+                where: { id: account.id },
+                data: { balance: { decrement: order.total } }
+             });
+          }
+
+          const productIds = Array.from(new Set(order.items.map(i => i.productId)));
+          const products = await tx.product.findMany({
+            where: { id: { in: productIds } },
+            include: { 
+              ingredients: true,
+              variants: { include: { ingredients: true } }
+            }
+          });
+          const productMap = new Map(products.map(p => [p.id, p]));
+
+          for (const item of order.items) {
+            const product = productMap.get(item.productId);
+            if (product) {
+              const ingredientsToUse = item.variantId 
+                ? (product.variants.find(v => v.id === item.variantId)?.ingredients || [])
+                : product.ingredients;
+
+              for (const ing of ingredientsToUse) {
+                await tx.inventoryItem.update({
+                  where: { id: ing.inventoryItemId },
+                  data: { quantity: { increment: ing.amountRequired * item.quantity } }
+                });
+              }
+            }
+          }
         }
+        
+        await logAudit(tx, ctx.user.id, 'UPDATE_ORDER_STATUS', `تغيير حالة الطلب #${order.orderNumber} إلى ${order.status}`);
+        io?.emit('order_status_updated', order);
+        return order;
       });
-      
-      io?.emit('order_status_updated', order);
-      await logAudit(ctx.prisma, ctx.user.id, 'UPDATE_ORDER_STATUS', `تغيير حالة الطلب #${order.orderNumber} إلى ${order.status}`);
-      return order;
     }),
 
   createOrder: publicProcedure
