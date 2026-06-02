@@ -25,6 +25,7 @@ import Link from "next/link";
 export default function CustomerHome() {
   const [phone, setPhone] = useState("");
   const [showPoints, setShowPoints] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [cart, setCart] = useState<any[]>([]);
   const [isCheckout, setIsCheckout] = useState(false);
@@ -150,19 +151,21 @@ export default function CustomerHome() {
         </div>
 
         {/* Offers Slider */}
-        <OfferSlider offers={offersQuery.data || []} />
+        <div id="offers-section">
+          <OfferSlider offers={offersQuery.data || []} />
+        </div>
 
         {/* Categories */}
-        <div className="flex gap-4 overflow-x-auto pb-6 no-scrollbar">
-          <CategoryBtn label="الكل" active />
+        <div className="flex gap-4 overflow-x-auto pb-6 no-scrollbar" id="menu-section">
+          <CategoryBtn label="الكل" active={selectedCategory === null} onClick={() => setSelectedCategory(null)} />
           {categoriesQuery.data?.map(cat => (
-            <CategoryBtn key={cat.id} label={cat.name} />
+            <CategoryBtn key={cat.id} label={cat.name} active={selectedCategory === cat.id} onClick={() => setSelectedCategory(cat.id)} />
           ))}
         </div>
 
         {/* Products Grid */}
         <div className="grid grid-cols-2 gap-4">
-          {productsQuery.data?.map((product) => (
+          {productsQuery.data?.filter(p => !selectedCategory || p.categoryId === selectedCategory).map((product) => (
             <motion.div 
               key={product.id}
               whileTap={{ scale: 0.98 }}
@@ -255,29 +258,29 @@ export default function CustomerHome() {
 
       {/* Bottom Nav */}
       <div className="fixed bottom-0 inset-x-0 bg-brand-navy/90 backdrop-blur-xl border-t border-white/5 px-8 py-4 flex justify-between items-center z-40">
-        <NavIcon icon={<HomeIcon />} label="الرئيسية" active />
-        <NavIcon icon={<Grid />} label="الأصناف" />
+        <NavIcon icon={<HomeIcon />} label="الرئيسية" active onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} />
+        <NavIcon icon={<Grid />} label="الأصناف" onClick={() => document.getElementById('menu-section')?.scrollIntoView({ behavior: 'smooth' })} />
         <div onClick={() => cart.length > 0 && setIsCheckout(true)} className="bg-brand-orange p-4 rounded-full -mt-12 shadow-2xl border-4 border-brand-black cursor-pointer">
           <ShoppingCart size={24} />
         </div>
-        <NavIcon icon={<Star />} label="العروض" />
+        <NavIcon icon={<Star />} label="العروض" onClick={() => document.getElementById('offers-section')?.scrollIntoView({ behavior: 'smooth' })} />
         <NavIcon icon={<User />} label="حسابي" href="/login" />
       </div>
     </div>
   );
 }
 
-function CategoryBtn({ label, active }: any) {
+function CategoryBtn({ label, active, onClick }: any) {
   return (
-    <button className={`px-6 py-3 rounded-2xl text-sm font-bold whitespace-nowrap transition-all ${active ? 'bg-brand-gold text-black' : 'bg-brand-navy-light text-gray-400 border border-white/5'}`}>
+    <button onClick={onClick} className={`px-6 py-3 rounded-2xl text-sm font-bold whitespace-nowrap transition-all ${active ? 'bg-brand-gold text-black shadow-lg shadow-brand-gold/20' : 'bg-brand-navy-light text-gray-400 border border-white/5 hover:text-white'}`}>
       {label}
     </button>
   );
 }
 
-function NavIcon({ icon, label, active, href }: any) {
+function NavIcon({ icon, label, active, href, onClick }: any) {
   const content = (
-    <div className={`flex flex-col items-center gap-1 ${active ? 'text-brand-orange' : 'text-gray-500'}`}>
+    <div onClick={onClick} className={`flex flex-col items-center gap-1 cursor-pointer ${active ? 'text-brand-orange' : 'text-gray-500 hover:text-white'}`}>
       {icon}
       <span className="text-[8px] font-bold uppercase">{label}</span>
     </div>
