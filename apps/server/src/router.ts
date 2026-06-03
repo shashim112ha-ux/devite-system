@@ -63,6 +63,12 @@ export const appRouter = router({
 
   // --- الأصناف والتصنيفات (POS & Product Procedures) ---
   getProducts: publicProcedure.query(async ({ ctx }) => {
+    // Memory Cache implementation (15s TTL)
+    const globalAny = global as any;
+    if (globalAny.productsCache && (Date.now() - globalAny.productsCache.timestamp) < 15000) {
+      return globalAny.productsCache.data;
+    }
+
     const products = await ctx.prisma.product.findMany({
       include: { 
         category: true,
@@ -71,7 +77,7 @@ export const appRouter = router({
       },
     });
 
-    return products.map(product => {
+    const result = products.map(product => {
       let autoCost = 0;
       let isStockAvailable = true;
 
@@ -106,6 +112,9 @@ export const appRouter = router({
         dynamicAvailable: product.available && (hasVariants ? anyVariantAvailable : (product.ingredients.length === 0 || isStockAvailable))
       };
     });
+
+    globalAny.productsCache = { data: result, timestamp: Date.now() };
+    return result;
   }),
 
   getCategories: publicProcedure.query(async ({ ctx }) => {
@@ -660,6 +669,7 @@ export const appRouter = router({
     today.setHours(0, 0, 0, 0);
 
     const orders = await ctx.prisma.order.findMany({
+      where: { createdAt: { gte: today } },
       include: { items: { include: { product: { include: { ingredients: { include: { inventoryItem: true } } } } } } }
     });
     const expenses = await ctx.prisma.expense.findMany({
