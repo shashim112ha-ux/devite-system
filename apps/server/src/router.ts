@@ -248,6 +248,9 @@ export const appRouter = router({
           data,
           include: { category: true, ingredients: { include: { inventoryItem: true } }, variants: { include: { ingredients: { include: { inventoryItem: true } } } } }
         });
+      }, {
+        maxWait: 15000,
+        timeout: 30000
       });
 
       await logAudit(ctx.prisma, ctx.user.id, 'UPDATE_PRODUCT', `تحديث الصنف: ${product.name}`);
