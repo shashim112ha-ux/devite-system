@@ -422,13 +422,21 @@ function ProductModal({ product, categories, inventory, onClose, onSave }: any) 
                     </div>
                     
                     {/* Variant Ingredients */}
-                    <div className="mt-4 pt-3 border-t border-white/5">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-xs text-brand-gold">مكونات هذا الحجم تحديداً:</span>
-                        <button type="button" onClick={() => { const nv = [...variants]; nv[vIdx].ingredients.push({ inventoryItemId: "", amountRequired: 0 }); setVariants(nv); }} className="text-[10px] text-brand-orange bg-brand-orange/10 px-2 py-1 rounded">
-                          + إضافة مكون
-                        </button>
-                      </div>
+                      <div className="mt-4 pt-3 border-t border-white/5">
+                        <div className="flex justify-between items-center mb-2">
+                          <div className="flex flex-col">
+                            <span className="text-xs text-brand-gold">مكونات هذا الحجم تحديداً:</span>
+                            <span className="text-[10px] text-gray-400 mt-1">
+                              التكلفة التلقائية: {(v.ingredients.reduce((acc: number, ing: any) => {
+                                const item = inventory.find((i: any) => i.id === ing.inventoryItemId);
+                                return acc + (item ? item.unitPrice * ing.amountRequired : 0);
+                              }, 0)).toFixed(3)} د.ب
+                            </span>
+                          </div>
+                          <button type="button" onClick={() => { const nv = [...variants]; nv[vIdx].ingredients.push({ inventoryItemId: "", amountRequired: 0 }); setVariants(nv); }} className="text-[10px] text-brand-orange bg-brand-orange/10 px-2 py-1 rounded">
+                            + إضافة مكون
+                          </button>
+                        </div>
                       {v.ingredients.map((ing: any, iIdx: number) => (
                         <div key={iIdx} className="flex gap-2 items-end mb-2">
                           <select value={ing.inventoryItemId} onChange={e => { const nv = [...variants]; nv[vIdx].ingredients[iIdx].inventoryItemId = e.target.value; setVariants(nv); }} className="flex-1 bg-brand-navy-light border border-white/5 rounded-lg p-2 text-xs">

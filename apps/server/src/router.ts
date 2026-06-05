@@ -425,9 +425,12 @@ export const appRouter = router({
           }
         }
         
-        await logAudit(tx, ctx.user.id, 'UPDATE_ORDER_STATUS', `تغيير حالة الطلب #${order.orderNumber} إلى ${order.status}`);
+        await logAudit(tx, ctx.user.id, 'UPDATE_ORDER_STATUS', `تم تحديث حالة الطلب #${order.orderNumber} إلى ${order.status}`);
         io?.emit('order_status_updated', order);
         return order;
+      }, {
+        maxWait: 10000,
+        timeout: 30000
       });
     }),
 
