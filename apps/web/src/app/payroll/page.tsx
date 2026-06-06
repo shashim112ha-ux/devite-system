@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { trpc } from "../utils/trpc";
+import { useReactToPrint } from "react-to-print";
 import { 
   Calculator, Printer, Save, CheckCircle, CreditCard, Calendar, Users, 
   TrendingUp, AlertCircle, FileSpreadsheet, Loader2 

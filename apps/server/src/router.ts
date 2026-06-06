@@ -746,10 +746,13 @@ export const appRouter = router({
       if (input.period === 'quarterly') startDate.setMonth(now.getMonth() - 36);
 
       const orders = await ctx.prisma.order.findMany({
-        where: { createdAt: { gte: startDate } }
+        where: { createdAt: { gte: startDate } },
+        include: { items: true }
       });
 
       const grouped: Record<string, number> = {};
+      let totalProductsSold = 0;
+      
       orders.forEach(o => {
         let key = '';
         if (input.period === 'daily') key = o.createdAt.toLocaleDateString('ar-BH');
@@ -763,9 +766,42 @@ export const appRouter = router({
           key = `الربع ${q} - ${o.createdAt.getFullYear()}`;
         }
         grouped[key] = (grouped[key] || 0) + o.total;
+        totalProductsSold += o.items ? o.items.reduce((sum, item) => sum + item.quantity, 0) : 0;
       });
 
-      return Object.entries(grouped).map(([name, sales]) => ({ name, sales }));
+      const chartData = Object.entries(grouped).map(([name, sales]) => ({ name, sales }));
+      
+      const sales = orders.reduce((sum, o) => sum + o.total, 0);
+      const cash = orders.filter(o => o.paymentMethod === 'CASH').reduce((sum, o) => sum + o.total, 0);
+      const card = orders.filter(o => o.paymentMethod === 'CARD').reduce((sum, o) => sum + o.total, 0);
+      const benefit = orders.filter(o => o.paymentMethod === 'BENEFIT').reduce((sum, o) => sum + o.total, 0);
+      const online = orders.filter(o => o.paymentMethod === 'ONLINE').reduce((sum, o) => sum + o.total, 0);
+      
+      const expensesList = await ctx.prisma.expense.findMany({
+        where: { date: { gte: startDate } }
+      });
+      const expenses = expensesList.reduce((sum, e) => sum + e.amount, 0);
+      
+      const net = sales - expenses;
+      const margin = sales > 0 ? (net / sales) * 100 : 0;
+      
+      const inventory = await ctx.prisma.inventoryItem.findMany();
+      const lowStock = inventory.filter(i => i.quantity <= i.minThreshold);
+
+      return {
+        chartData,
+        stats: {
+          sales,
+          expenses,
+          net,
+          cash,
+          card,
+          benefit,
+          online,
+          margin
+        },
+        lowStock
+      };
     }),
 
   // --- المخزون (Smart Inventory) ---
@@ -1468,7 +1504,8 @@ export const appRouter = router({
       bonuses: z.number().optional(),
       deductions: z.number().optional(),
       advances: z.number().optional(),
-      notes: z.string().optional()
+      notes: z.string().optional(),
+      editReason: z.string().optional()
     }))
     .mutation(async ({ input, ctx }) => {
       const existing = await ctx.prisma.payroll.findUnique({
@@ -2154,12 +2191,97 @@ export const appRouter = router({
       return ctx.prisma.branchLocation.update({ where: { id }, data });
     }),
 
-  getAuditLogs: adminProcedure.query(async ({ ctx }) => {
-    return ctx.prisma.auditLog.findMany({
-      include: { user: { select: { name: true, role: true } } },
-      orderBy: { createdAt: 'desc' }
-    });
+  getAuditLogs: adminProcedure
+    .input(z.object({ filterType: z.string().optional() }).optional())
+    .query(async ({ input, ctx }) => {
+      let dateFilter: any = undefined;
+      
+      if (input?.filterType && input.filterType !== 'all') {
+        const now = new Date();
+        const start = new Date();
+        start.setHours(0, 0, 0, 0);
+        
+        if (input.filterType === 'daily') {
+          // already set to today
+        } else if (input.filterType === 'weekly') {
+          start.setDate(now.getDate() - 7);
+        } else if (input.filterType === 'monthly') {
+          start.setMonth(now.getMonth() - 1);
+        }
+        
+        dateFilter = { gte: start };
+      }
+
+      return ctx.prisma.auditLog.findMany({
+        where: dateFilter ? { createdAt: dateFilter } : undefined,
+        include: { user: { select: { name: true, role: true } } },
+        orderBy: { createdAt: 'desc' }
+      });
+    }),
+
+  getBackupLogs: adminProcedure.query(async () => {
+    // Return empty array or mock data since backups are filesystem-based
+    return [];
   }),
+
+  getDetailedSalesLog: staffProcedure
+    .input(z.object({ filterType: z.string().optional() }).optional())
+    .query(async ({ input, ctx }) => {
+      let dateFilter: any = undefined;
+      if (input?.filterType && input.filterType !== 'all') {
+        const start = new Date();
+        start.setHours(0, 0, 0, 0);
+        if (input.filterType === 'weekly') start.setDate(start.getDate() - 7);
+        if (input.filterType === 'monthly') start.setMonth(start.getMonth() - 1);
+        dateFilter = { gte: start };
+      }
+      return ctx.prisma.order.findMany({
+        where: dateFilter ? { createdAt: dateFilter } : undefined,
+        include: { items: { include: { product: true } } },
+        orderBy: { createdAt: 'desc' }
+      });
+    }),
+
+  getSalesAnalytics: staffProcedure
+    .input(z.object({ filterType: z.string().optional() }).optional())
+    .query(async ({ input, ctx }) => {
+      let dateFilter: any = undefined;
+      if (input?.filterType && input.filterType !== 'all') {
+        const start = new Date();
+        start.setHours(0, 0, 0, 0);
+        if (input.filterType === 'weekly') start.setDate(start.getDate() - 7);
+        if (input.filterType === 'monthly') start.setMonth(start.getMonth() - 1);
+        dateFilter = { gte: start };
+      }
+      const orders = await ctx.prisma.order.findMany({
+        where: dateFilter ? { createdAt: dateFilter } : undefined,
+        include: { items: { include: { product: true } } }
+      });
+      const totalSales = orders.reduce((sum, o) => sum + o.total, 0);
+      let totalCost = 0;
+      const productCounts: Record<string, { name: string, quantity: number }> = {};
+      
+      orders.forEach(o => {
+        o.items.forEach(i => {
+          totalCost += i.product.cost * i.quantity;
+          if (!productCounts[i.product.name]) {
+            productCounts[i.product.name] = { name: i.product.name, quantity: 0 };
+          }
+          productCounts[i.product.name].quantity += i.quantity;
+        });
+      });
+      
+      const topProducts = Object.values(productCounts)
+        .sort((a, b) => b.quantity - a.quantity)
+        .slice(0, 5);
+
+      return {
+        totalSales,
+        totalProfit: totalSales - totalCost,
+        topProducts,
+        count: orders.length
+      };
+    }),
 
   // ==========================================
   // نظام الواتساب المتكامل
