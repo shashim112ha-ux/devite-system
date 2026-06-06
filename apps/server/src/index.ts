@@ -50,6 +50,21 @@ app.post('/upload', (req: any, res: any) => {
   }
 });
 
+// Download Backup Endpoint
+app.get('/download-backup/:filename', (req: any, res: any) => {
+  const filename = req.params.filename;
+  // Basic security check to prevent directory traversal
+  if (!filename.match(/^backup_\d+\.json$/)) {
+    return res.status(403).send('Invalid filename');
+  }
+  const file = path.join(__dirname, '../backups', filename);
+  if (fs.existsSync(file)) {
+    res.download(file);
+  } else {
+    res.status(404).send('Backup file not found');
+  }
+});
+
 app.use(
   '/trpc',
   trpcExpress.createExpressMiddleware({

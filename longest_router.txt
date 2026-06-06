@@ -1,0 +1,65 @@
+Created At: 2026-05-25T04:53:36Z
+Completed At: 2026-05-25T04:53:36Z
+
+				The command completed successfully.
+				Output:
+				
+apps\server\src\router.ts:6:  publicProcedure, 
+apps\server\src\router.ts:7:  protectedProcedure, 
+apps\server\src\router.ts:8:  adminProcedure, 
+apps\server\src\router.ts:9:  managerProcedure, 
+apps\server\src\router.ts:10:  cashierProcedure, 
+apps\server\src\router.ts:11:  kitchenProcedure,
+apps\server\src\router.ts:12:  staffProcedure,
+apps\server\src\router.ts:13:  investorProcedure
+apps\server\src\router.ts:35:  health: publicProcedure.query(() => 'ok'),
+apps\server\src\router.ts:37:  // --- �ꭟ� �韥 (Auth Procedures) ---
+apps\server\src\router.ts:38:  login: publicProcedure
+apps\server\src\router.ts:63:  // --- �隭� �颭�埢 (POS & Product Procedures) ---
+apps\server\src\router.ts:64:  getProducts: publicProcedure.query(async ({ ctx }) => {
+apps\server\src\router.ts:89:  getCategories: publicProcedure.query(async ({ ctx }) => {
+apps\server\src\router.ts:97:  createProduct: managerProcedure
+apps\server\src\router.ts:129:  updateProduct: managerProcedure
+apps\server\src\router.ts:173:  deleteProduct: managerProcedure
+apps\server\src\router.ts:182:  toggleProductAvailability: managerProcedure
+apps\server\src\router.ts:193:  addCategory: managerProcedure
+apps\server\src\router.ts:201:  updateCategory: managerProcedure
+apps\server\src\router.ts:209:  deleteCategory: managerProcedure
+apps\server\src\router.ts:220:  getOffers: publicProcedure.query(async ({ ctx }) => {
+apps\server\src\router.ts:229:  getAllOffers: managerProcedure.query(async ({ ctx }) => {
+apps\server\src\router.ts:233:  createOffer: managerProcedure
+apps\server\src\router.ts:241:  updateOfferStatus: managerProcedure
+apps\server\src\router.ts:250:  getKitchenOrders: kitchenProcedure.query(async ({ ctx }) => {
+apps\server\src\router.ts:262:  updateOrderStatus: kitchenProcedure
+apps\server\src\router.ts:296:  createOrder: publicProcedure
+apps\server\src\router.ts:439:  updateO
+<truncated 3762 bytes>
+:  getFeedbackList: protectedProcedure.query(async ({ ctx }) => {
+apps\server\src\router.ts:1670:  replyToFeedback: managerProcedure
+apps\server\src\router.ts:1687:  submitPublicFeedback: publicProcedure
+apps\server\src\router.ts:1699:  getPublicFeedbacks: managerProcedure.query(async ({ ctx }) => {
+apps\server\src\router.ts:1703:  markPublicFeedbackRead: managerProcedure
+apps\server\src\router.ts:1713:  getSystemSettings: publicProcedure.query(async ({ ctx }) => {
+apps\server\src\router.ts:1728:  updateSystemSettings: adminProcedure
+apps\server\src\router.ts:1758:  triggerDatabaseBackup: adminProcedure.mutation(async ({ ctx }) => {
+apps\server\src\router.ts:1776:  getAccounts: adminProcedure.query(async ({ ctx }) => {
+apps\server\src\router.ts:1779:  createAccount: adminProcedure
+apps\server\src\router.ts:1784:  updateAccount: adminProcedure
+apps\server\src\router.ts:1790:  deleteAccount: adminProcedure
+apps\server\src\router.ts:1797:  getBranchLocations: adminProcedure.query(async ({ ctx }) => {
+apps\server\src\router.ts:1800:  createBranchLocation: adminProcedure
+apps\server\src\router.ts:1805:  updateBranchLocation: adminProcedure
+apps\server\src\router.ts:1812:  getAuditLogs: adminProcedure.query(async ({ ctx }) => {
+apps\server\src\router.ts:1823:  getWhatsAppSettings: adminProcedure.query(async ({ ctx }) => {
+apps\server\src\router.ts:1828:  getWhatsAppStatus: adminProcedure.query(() => {
+apps\server\src\router.ts:1832:  restartWhatsAppClient: adminProcedure.mutation(() => {
+apps\server\src\router.ts:1837:  updateWhatsAppSettings: adminProcedure
+apps\server\src\router.ts:1867:  getWhatsAppTemplates: adminProcedure.query(async ({ ctx }) => {
+apps\server\src\router.ts:1877:  updateWhatsAppTemplate: adminProcedure
+apps\server\src\router.ts:1889:  getWhatsAppLogs: adminProcedure
+apps\server\src\router.ts:1901:  testWhatsApp: adminProcedure
+apps\server\src\router.ts:1909:  retryWhatsAppMessage: adminProcedure
+apps\server\src\router.ts:1919:  generateShiftReportPDF: adminProcedure
+
+
+

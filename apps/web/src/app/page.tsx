@@ -74,16 +74,39 @@ export default function CustomerHome() {
       if (options.size === "صغير") finalPrice -= 0.2;
     }
 
-    setCart([...cart, {
-      cartItemId: `${product.id}-${options.variantId}-${options.size}-${options.sugar}-${options.ice}-${options.notes}`,
-      id: product.id,
-      variantId: options.variantId,
-      name: product.name,
-      price: finalPrice,
-      ...options,
-      quantity: 1
-    }]);
+    const cartItemId = `${product.id}-${options.variantId}-${options.size}-${options.sugar}-${options.ice}-${options.notes}`;
+    const existing = cart.find(item => item.cartItemId === cartItemId);
+
+    if (existing) {
+      setCart(cart.map(item => 
+        item.cartItemId === cartItemId ? { ...item, quantity: item.quantity + 1 } : item
+      ));
+    } else {
+      setCart([...cart, {
+        cartItemId,
+        id: product.id,
+        variantId: options.variantId,
+        name: product.name,
+        price: finalPrice,
+        ...options,
+        quantity: 1
+      }]);
+    }
     setSelectedProduct(null);
+  };
+
+  const updateQuantity = (cartItemId: string, amount: number) => {
+    setCart(cart.map(item => {
+      if (item.cartItemId === cartItemId) {
+        const newQty = item.quantity + amount;
+        return newQty > 0 ? { ...item, quantity: newQty } : null;
+      }
+      return item;
+    }).filter(Boolean));
+  };
+
+  const removeFromCart = (cartItemId: string) => {
+    setCart(cart.filter(item => item.cartItemId !== cartItemId));
   };
 
   const total = cart.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0);
@@ -225,6 +248,8 @@ export default function CustomerHome() {
             setCustomerName={setCustomerName}
             paymentMethod={paymentMethod}
             setPaymentMethod={setPaymentMethod}
+            updateQuantity={updateQuantity}
+            removeFromCart={removeFromCart}
           />
         )}
       </AnimatePresence>
@@ -390,7 +415,7 @@ function OptionGroup({ label, options, value, onChange }: any) {
   );
 }
 
-function CheckoutOverlay({ cart, total, onClose, onConfirm, phone, setPhone, customerName, setCustomerName, paymentMethod, setPaymentMethod }: any) {
+function CheckoutOverlay({ cart, total, onClose, onConfirm, phone, setPhone, customerName, setCustomerName, paymentMethod, setPaymentMethod, updateQuantity, removeFromCart }: any) {
   return (
     <motion.div 
       initial={{ x: "100%" }}
@@ -405,14 +430,24 @@ function CheckoutOverlay({ cart, total, onClose, onConfirm, phone, setPhone, cus
 
       <div className="flex-1 overflow-y-auto space-y-6">
         {cart.map((item: any, idx: number) => (
-          <div key={idx} className="bg-brand-navy-light p-5 rounded-[30px] border border-white/5 flex gap-4">
-            <div className="w-20 h-20 bg-brand-black rounded-2xl flex items-center justify-center text-3xl">🥤</div>
-            <div className="flex-1">
-              <div className="flex justify-between items-start">
-                <h4 className="font-bold">{item.name}</h4>
-                <span className="text-brand-orange font-bold text-sm">{item.price} د.ب</span>
+          <div key={idx} className="bg-brand-navy-light p-5 rounded-[30px] border border-white/5 flex flex-col gap-4">
+            <div className="flex gap-4">
+              <div className="w-20 h-20 bg-brand-black rounded-2xl flex items-center justify-center text-3xl">🧋</div>
+              <div className="flex-1">
+                <div className="flex justify-between items-start">
+                  <h4 className="font-bold">{item.name}</h4>
+                  <span className="text-brand-orange font-bold text-sm">{item.price} د.ب</span>
+                </div>
+                <p className="text-[10px] text-gray-500 mt-1">{item.size} • سكر {item.sugar} • ثلج {item.ice}</p>
               </div>
-              <p className="text-[10px] text-gray-500 mt-1">{item.size} • سكر {item.sugar} • ثلج {item.ice}</p>
+            </div>
+            <div className="flex justify-between items-center bg-brand-navy p-2 rounded-2xl">
+              <div className="flex items-center gap-4 px-2">
+                <button onClick={() => updateQuantity(item.cartItemId, -1)} className="p-2 text-white/50 hover:text-white bg-white/5 rounded-lg"><Minus size={16}/></button>
+                <span className="font-bold text-sm">{item.quantity}</span>
+                <button onClick={() => updateQuantity(item.cartItemId, 1)} className="p-2 text-white/50 hover:text-white bg-white/5 rounded-lg"><Plus size={16}/></button>
+              </div>
+              <button onClick={() => removeFromCart(item.cartItemId)} className="p-2 text-red-500/50 hover:text-red-500 bg-red-500/10 rounded-lg text-xs font-bold">حذف</button>
             </div>
           </div>
         ))}

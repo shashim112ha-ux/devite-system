@@ -215,8 +215,6 @@ export const appRouter = router({
     }))
     .mutation(async ({ input, ctx }) => {
       const { id, ingredients, variants, ...data } = input;
-      if (data.categoryId === "") delete data.categoryId; // Fix empty category ID issue
-      
       const product = await ctx.prisma.$transaction(async (tx) => {
         if (ingredients) {
           await tx.productIngredient.deleteMany({ where: { productId: id } });
@@ -1860,122 +1858,57 @@ export const appRouter = router({
       return exp;
     }),
 
-  getDetailedExpenses: staffProcedure
-    .input(z.object({
-      filterType: z.string().optional(),
-      startDate: z.string().optional(),
-      endDate: z.string().optional()
-    }).optional())
-    .query(async ({ input, ctx }) => {
-      let dateFilter: any = undefined;
-      
-      if (input?.filterType && input.filterType !== 'all') {
-        const now = new Date();
-        const start = new Date();
-        start.setHours(0, 0, 0, 0);
-        const end = new Date();
-        end.setHours(23, 59, 59, 999);
-        
-        if (input.filterType === 'daily') {
-          // already set to today
-        } else if (input.filterType === 'weekly') {
-          start.setDate(now.getDate() - now.getDay());
-        } else if (input.filterType === 'monthly') {
-          start.setDate(1);
-        } else if (input.filterType === 'custom' && input.startDate && input.endDate) {
-          start.setTime(new Date(input.startDate).getTime());
-          end.setTime(new Date(input.endDate).getTime());
-          end.setHours(23, 59, 59, 999);
-        }
-        
-        dateFilter = { gte: start, lte: end };
+  getDetailedExpenses: staffProcedure.query(async ({ ctx }) => {
+    return ctx.prisma.expense.findMany({
+      include: { recordedBy: { select: { name: true } } },
+      orderBy: { date: 'desc' }
+    });
+  }),
+
+  getExpenseAnalytics: staffProcedure.query(async ({ ctx }) => {
+    const expenses = await ctx.prisma.expense.findMany();
+    const total = expenses.reduce((sum, e) => sum + e.amount, 0);
+
+    // Group by category
+    const categoryGroup: Record<string, number> = {};
+    expenses.forEach(e => {
+      categoryGroup[e.category] = (categoryGroup[e.category] || 0) + e.amount;
+    });
+
+    const categoryStats = Object.entries(categoryGroup).map(([name, value]) => ({
+      name,
+      value,
+      percentage: total > 0 ? Math.round((value / total) * 100) : 0
+    }));
+
+    // Find highest expense
+    let highest = null;
+    if (expenses.length > 0) {
+      highest = expenses.reduce((prev, curr) => prev.amount > curr.amount ? prev : curr);
+    }
+
+    // Top supplier
+    const suppliers: Record<string, number> = {};
+    expenses.forEach(e => {
+      if (e.supplier) {
+        suppliers[e.supplier] = (suppliers[e.supplier] || 0) + e.amount;
       }
+    });
+    const topSupplier = Object.keys(suppliers).length > 0
+      ? Object.keys(suppliers).reduce((a, b) => suppliers[a] > suppliers[b] ? a : b)
+      : 'غير متوفر';
 
-      return ctx.prisma.expense.findMany({
-        where: dateFilter ? { date: dateFilter } : undefined,
-        include: { recordedBy: { select: { name: true } } },
-        orderBy: { date: 'desc' }
-      });
-    }),
-
-  getExpenseAnalytics: staffProcedure
-    .input(z.object({
-      filterType: z.string().optional(),
-      startDate: z.string().optional(),
-      endDate: z.string().optional()
-    }).optional())
-    .query(async ({ input, ctx }) => {
-      let dateFilter: any = undefined;
-      
-      if (input?.filterType && input.filterType !== 'all') {
-        const now = new Date();
-        const start = new Date();
-        start.setHours(0, 0, 0, 0);
-        const end = new Date();
-        end.setHours(23, 59, 59, 999);
-        
-        if (input.filterType === 'daily') {
-          // already set to today
-        } else if (input.filterType === 'weekly') {
-          start.setDate(now.getDate() - now.getDay());
-        } else if (input.filterType === 'monthly') {
-          start.setDate(1);
-        } else if (input.filterType === 'custom' && input.startDate && input.endDate) {
-          start.setTime(new Date(input.startDate).getTime());
-          end.setTime(new Date(input.endDate).getTime());
-          end.setHours(23, 59, 59, 999);
-        }
-        
-        dateFilter = { gte: start, lte: end };
-      }
-
-      const expenses = await ctx.prisma.expense.findMany({
-        where: dateFilter ? { date: dateFilter } : undefined
-      });
-      const total = expenses.reduce((sum, e) => sum + e.amount, 0);
-      const count = expenses.length;
-
-      // Group by category
-      const categoryGroup: Record<string, number> = {};
-      expenses.forEach(e => {
-        categoryGroup[e.category] = (categoryGroup[e.category] || 0) + e.amount;
-      });
-
-      const categoryStats = Object.entries(categoryGroup).map(([name, value]) => ({
-        name,
-        value,
-        percentage: total > 0 ? Math.round((value / total) * 100) : 0
-      }));
-
-      // Find highest expense
-      let highest = null;
-      if (expenses.length > 0) {
-        highest = expenses.reduce((prev, curr) => prev.amount > curr.amount ? prev : curr);
-      }
-
-      // Top supplier
-      const suppliers: Record<string, number> = {};
-      expenses.forEach(e => {
-        if (e.supplier) {
-          suppliers[e.supplier] = (suppliers[e.supplier] || 0) + e.amount;
-        }
-      });
-      const topSupplier = Object.keys(suppliers).length > 0
-        ? Object.keys(suppliers).reduce((a, b) => suppliers[a] > suppliers[b] ? a : b)
-        : 'غير متوفر';
-
-      return {
-        total,
-        count,
-        categoryStats,
-        highestExpense: highest,
-        topSupplier,
-        recommendations: [
-          total > 1000 ? "مستوى المصاريف مرتفع، يوصى بتقليل شراء الأدوات الفردية والشراء بالجملة." : "المصاريف ضمن الحدود الطبيعية المقدرة.",
-          categoryGroup["تسويق"] && categoryGroup["تسويق"] > total * 0.3 ? "استقطاع التسويق يتجاوز 30% من المصاريف، يوصى بتقييم العائد على الإنفاق الإعلاني." : "توزيع ميزانية التسويق متزن."
-        ]
-      };
-    }),
+    return {
+      total,
+      categoryStats,
+      highestExpense: highest ? `${highest.description || highest.category} (${highest.amount} د.ب)` : 'لا يوجد',
+      topSupplier,
+      recommendations: [
+        total > 1000 ? "مستوى المصاريف مرتفع، يوصى بتقليل شراء الأدوات الفردية والشراء بالجملة." : "المصاريف ضمن الحدود الطبيعية المقدرة.",
+        categoryGroup["تسويق"] && categoryGroup["تسويق"] > total * 0.3 ? "استقطاع التسويق يتجاوز 30% من المصاريف، يوصى بتقييم العائد على الإنفاق الإعلاني." : "توزيع ميزانية التسويق متزن."
+      ]
+    };
+  }),
 
   // --- Employee Feedback System ---
   createFeedback: protectedProcedure  // متاح لجميع الموظفين المسجلين

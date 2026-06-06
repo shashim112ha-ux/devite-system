@@ -4,8 +4,10 @@ import "./globals.css";
 import { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { 
-  LayoutDashboard, 
-  ChefHat, 
+  LayoutDashboard,
+  Activity, 
+  ChefHat,
+  FileText, 
   Users, 
   Package, 
   BarChart3, 
@@ -91,15 +93,15 @@ function RoleGuard({ children, pathname }: { children: React.ReactNode, pathname
     // Simple RBAC rules
     if (!storedRole && pathname !== '/' && pathname !== '/login' && pathname !== '/public-feedback') {
       router.push('/login');
-    } else if (storedRole === 'KITCHEN' && ![ '/kitchen', '/feedback', '/shift-report', '/schedule', '/attendance'].includes(pathname)) {
+    } else if (storedRole === 'KITCHEN' && ![ '/kitchen', '/recipes', '/feedback', '/shift-report', '/schedule', '/attendance'].includes(pathname)) {
       router.push('/attendance');
     } else if (storedRole === 'CASHIER' && !['/pos', '/shift-report', '/feedback', '/schedule', '/attendance'].includes(pathname)) {
       router.push('/attendance');
-    } else if (storedRole === 'INVESTOR' && !['/investors', '/public-feedback', '/reports', '/feedback'].includes(pathname)) {
+    } else if (storedRole === 'INVESTOR' && !['/investors', '/public-feedback', '/reports', '/sales', '/feedback'].includes(pathname)) {
       router.push('/investors');
-    } else if (storedRole === 'INVESTOR_STAFF' && !['/pos', '/kitchen', '/feedback', '/shift-report', '/schedule', '/attendance', '/inventory', '/expenses', '/investors', '/reports', '/public-feedback'].includes(pathname)) {
+    } else if (storedRole === 'INVESTOR_STAFF' && !['/pos', '/kitchen', '/recipes', '/feedback', '/shift-report', '/schedule', '/attendance', '/inventory', '/expenses', '/investors', '/reports', '/sales', '/public-feedback'].includes(pathname)) {
       router.push('/attendance');
-    } else if (storedRole === 'STAFF' && !['/pos', '/kitchen', '/feedback', '/shift-report', '/schedule', '/attendance', '/inventory', '/expenses'].includes(pathname)) {
+    } else if (storedRole === 'STAFF' && !['/pos', '/kitchen', '/recipes', '/feedback', '/shift-report', '/schedule', '/attendance', '/inventory', '/expenses'].includes(pathname)) {
       router.push('/attendance');
     }
   }, [pathname, router]);
@@ -144,7 +146,8 @@ function RoleGuard({ children, pathname }: { children: React.ReactNode, pathname
             {(role === 'ADMIN' || role === 'MANAGER') && (
               <>
                 <SidebarLink href="/dashboard" icon={<LayoutDashboard size={18} />} label="لوحة التحكم" active={pathname === '/dashboard'} />
-                <SidebarLink href="/reports" icon={<BarChart3 size={18} />} label="التقارير والإحصاءات" active={pathname === '/reports'} />
+                <SidebarLink href="/reports" icon={<BarChart3 size={18} />} label="الإحصائيات والتقارير" active={pathname === '/reports' || pathname === '/sales'} />
+                <SidebarLink href="/sales" icon={<Activity size={18} />} label="سجل المبيعات" active={pathname === '/sales'} />
                 <SidebarLink href="/products" icon={<UtensilsCrossed size={18} />} label="إدارة الأصناف" active={pathname === '/products'} />
                 <SidebarLink href="/inventory" icon={<Package size={18} />} label="المخزون الذكي" active={pathname === '/inventory'} />
                 <SidebarLink href="/staff" icon={<Users size={18} />} label="إدارة الموظفين" active={pathname === '/staff'} />
@@ -156,7 +159,10 @@ function RoleGuard({ children, pathname }: { children: React.ReactNode, pathname
               </>
             )}
             {(role === 'ADMIN' || role === 'MANAGER' || role === 'KITCHEN' || role === 'STAFF' || role === 'INVESTOR_STAFF') && (
-              <SidebarLink href="/kitchen" icon={<ChefHat size={18} />} label="شاشة المطبخ" active={pathname === '/kitchen'} />
+              <>
+                <SidebarLink href="/kitchen" icon={<ChefHat size={18} />} label="المطبخ والطلبات" active={pathname === '/kitchen'} />
+                <SidebarLink href="/recipes" icon={<FileText size={18} />} label="دليل المقادير" active={pathname === '/recipes'} />
+              </>
             )}
             {(role === 'ADMIN' || role === 'MANAGER' || role === 'CASHIER' || role === 'STAFF' || role === 'INVESTOR_STAFF') && (
               <>
@@ -185,7 +191,8 @@ function RoleGuard({ children, pathname }: { children: React.ReactNode, pathname
             {/* روابط المستثمر */}
             {(role === 'INVESTOR' || role === 'INVESTOR_STAFF') && (
               <>
-                <SidebarLink href="/reports" icon={<BarChart3 size={18} />} label="التقارير والإحصاءات" active={pathname === '/reports'} />
+                <SidebarLink href="/reports" icon={<BarChart3 size={18} />} label="الإحصائيات والتقارير" active={pathname === '/reports' || pathname === '/sales'} />
+                <SidebarLink href="/sales" icon={<Activity size={18} />} label="سجل المبيعات" active={pathname === '/sales'} />
                 <SidebarLink href="/investors" icon={<Coins size={18} />} label="لوحة المستثمر" active={pathname === '/investors'} />
               </>
             )}

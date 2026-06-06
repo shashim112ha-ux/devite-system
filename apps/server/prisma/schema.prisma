@@ -198,6 +198,7 @@ model Order {
   items         OrderItem[]
   timeline      OrderTimelineStep[]
   whatsappStatus String?     // SENT, FAILED, PENDING
+  profit        Float         @default(0) // ADDED: to track exact profit per order
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   
@@ -296,6 +297,11 @@ model AuditLog {
   user      User     @relation(fields: [userId], references: [id])
   action    String
   details   String?
+  entityId  String?
+  entityType String?
+  oldValues String?
+  newValues String?
+  page      String?
   createdAt DateTime @default(now())
 }
 
@@ -348,6 +354,9 @@ model Payroll {
   paymentDate      DateTime?
   notes            String?
   approvedBy       String?
+  lastEditedBy     String?
+  lastEditedAt     DateTime?
+  editReason       String?
   createdAt        DateTime  @default(now())
 }
 
@@ -571,4 +580,12 @@ model WhatsAppLog {
 
   userId       String?
   user         User?     @relation(fields: [userId], references: [id])
+}
+
+model BackupLog {
+  id        String   @id @default(cuid())
+  fileName  String
+  status    String   // SUCCESS, FAILED
+  createdBy String?
+  createdAt DateTime @default(now())
 }

@@ -10,11 +10,12 @@ import { motion, AnimatePresence } from "framer-motion";
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<"general" | "branches" | "accounts" | "whatsapp" | "backup" | "logs">("general");
+  const [auditFilter, setAuditFilter] = useState('today');
 
   const settingsQuery = trpc.getSystemSettings.useQuery();
   const branchesQuery = trpc.getBranchLocations.useQuery();
   const accountsQuery = trpc.getAccounts.useQuery();
-  const logsQuery = trpc.getAuditLogs.useQuery(undefined, { enabled: activeTab === 'logs' });
+  const logsQuery = trpc.getAuditLogs.useQuery({ filterType: auditFilter }, { enabled: activeTab === 'logs' });
 
   return (
     <div className="min-h-screen bg-brand-black p-10">
@@ -47,7 +48,7 @@ export default function SettingsPage() {
             {activeTab === 'accounts' && <AccountsTab data={accountsQuery.data} refetch={accountsQuery.refetch} />}
             {activeTab === 'whatsapp' && <WhatsAppTab data={settingsQuery.data} refetch={settingsQuery.refetch} />}
             {activeTab === 'backup' && <BackupTab />}
-            {activeTab === 'logs' && <LogsTab data={logsQuery.data} />}
+            {activeTab === 'logs' && <LogsTab data={logsQuery.data} filter={auditFilter} setFilter={setAuditFilter} isLoading={logsQuery.isLoading} />}
          </div>
       </div>
     </div>
@@ -318,29 +319,76 @@ function AccountsTab({ data, refetch }: any) {
 // ----------------------------------------------------
 function BackupTab() {
    const backupMutation = trpc.triggerDatabaseBackup.useMutation();
+   const logsQuery = trpc.getBackupLogs.useQuery();
 
    const handleBackup = async () => {
       try {
          const res = await backupMutation.mutateAsync();
-         alert("تم أخذ نسخة احتياطية بنجاح باسم:\n" + res.fileName + "\n(محفوظة في مجلد السيرفر)");
+         alert("تم إنشاء نسخة احتياطية بنجاح:\n" + res.fileName);
+         logsQuery.refetch();
       } catch (e: any) {
          alert("خطأ: " + e.message);
       }
    };
 
+   const handleDownload = (fileName: string) => {
+      window.open(`http://localhost:3001/download-backup/${fileName}`, '_blank');
+   };
+
    return (
-      <div className="bg-brand-navy border border-white/5 rounded-[30px] p-8 text-center">
-         <div className="w-24 h-24 bg-brand-orange/20 text-brand-orange rounded-full flex items-center justify-center mx-auto mb-6">
-            <Database size={48} />
+      <div className="space-y-6">
+         <div className="bg-brand-navy border border-white/5 rounded-[30px] p-8 text-center">
+            <div className="w-24 h-24 bg-brand-orange/20 text-brand-orange rounded-full flex items-center justify-center mx-auto mb-6">
+               <Database size={48} />
+            </div>
+            <h2 className="text-3xl font-black mb-4">النسخ الاحتياطي الشامل (آمن)</h2>
+            <p className="text-gray-400 mb-8 max-w-md mx-auto">
+               قم بإنشاء نسخة احتياطية آمنة بصيغة JSON لجميع بيانات النظام والمطعم. سيتم حفظها تلقائياً ويمكنك تنزيلها لاحقاً بأي وقت.
+            </p>
+            <button onClick={handleBackup} disabled={backupMutation.isLoading} className="bg-brand-orange px-8 py-4 rounded-xl font-bold text-lg inline-flex items-center gap-3 text-black">
+               <RefreshCw size={24} className={backupMutation.isLoading ? 'animate-spin' : ''} />
+               {backupMutation.isLoading ? 'جاري النسخ...' : 'إنشاء نسخة احتياطية الآن'}
+            </button>
          </div>
-         <h2 className="text-3xl font-black mb-4">النسخ الاحتياطي لقاعدة البيانات</h2>
-         <p className="text-gray-400 mb-8 max-w-md mx-auto">
-            بإمكانك أخذ نسخة احتياطية فورية من قاعدة البيانات الحالية لضمان عدم ضياع بيانات المطعم في حال حدوث أي طارئ.
-         </p>
-         <button onClick={handleBackup} disabled={backupMutation.isLoading} className="bg-brand-orange px-8 py-4 rounded-xl font-bold text-lg inline-flex items-center gap-3">
-            <RefreshCw size={24} className={backupMutation.isLoading ? 'animate-spin' : ''} />
-            {backupMutation.isLoading ? 'جاري النسخ...' : 'إنشاء نسخة احتياطية الآن'}
-         </button>
+
+         <div className="bg-brand-navy border border-white/5 rounded-[30px] p-8">
+            <h3 className="text-xl font-bold mb-4 text-brand-gold">سجل النسخ الاحتياطية</h3>
+            {logsQuery.isLoading ? <p>جاري التحميل...</p> : (
+               <table className="w-full text-right">
+                  <thead className="text-gray-400 text-sm">
+                     <tr>
+                        <th className="pb-4">اسم الملف</th>
+                        <th className="pb-4">التاريخ والوقت</th>
+                        <th className="pb-4">الحالة</th>
+                        <th className="pb-4 text-center">تحميل</th>
+                     </tr>
+                  </thead>
+                  <tbody className="text-sm">
+                     {logsQuery.data?.map((log: any) => (
+                        <tr key={log.id} className="border-t border-white/5">
+                           <td className="py-4 text-gray-300" dir="ltr">{log.fileName}</td>
+                           <td className="py-4">{new Date(log.createdAt).toLocaleString('en-US', { hour12: true })}</td>
+                           <td className="py-4">
+                              {log.status === 'SUCCESS' ? 
+                                 <span className="text-green-500 bg-green-500/10 px-2 py-1 rounded">ناجح</span> : 
+                                 <span className="text-red-500 bg-red-500/10 px-2 py-1 rounded">فشل</span>}
+                           </td>
+                           <td className="py-4 text-center">
+                              {log.status === 'SUCCESS' && (
+                                 <button onClick={() => handleDownload(log.fileName)} className="text-brand-orange hover:text-brand-gold font-bold bg-brand-orange/10 px-3 py-1 rounded-lg">
+                                    تحميل 📥
+                                 </button>
+                              )}
+                           </td>
+                        </tr>
+                     ))}
+                     {(!logsQuery.data || logsQuery.data.length === 0) && (
+                        <tr><td colSpan={4} className="py-8 text-center text-gray-500">لا توجد نسخ احتياطية مسجلة بعد.</td></tr>
+                     )}
+                  </tbody>
+               </table>
+            )}
+         </div>
       </div>
    );
 }

@@ -1,0 +1,86 @@
+Created At: 2026-06-06T07:54:18Z
+Completed At: 2026-06-06T07:54:20Z
+
+				The command completed successfully.
+				Output:
+				        if (existing) {
+          pr = await ctx.prisma.payroll.update({
+            where: { id: existing.id },
+            data: {
+              presenceDays,
+              absenceDays,
+              workHours,
+              overtimeHours,
+              delayHours,
+              basicSalary,
+data: { totalWithdrawn: { increment: input.amount } }
+      });
+      await logAudit(ctx.prisma, ctx.user.id, 'INVESTOR_WITHDRAW', `�?�?�? �?�?�?�? �?�?�?�?�?�?�? ${investor.name} �?�?�?�?�? ${input.amount} �?.�?`);
+      return investor;
+    }),
+
+  distributeInvestorProfit: adminProcedure
+    .input(z.object({ amountToDistribute: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const investors = await ctx.prisma.investor.findMany({ where: { isActive: true } });
+      const totalPercentage = investors.reduce((sum, inv) => sum + inv.sharePercentage, 0);
+      if (totalPercentage === 0) throw new Error('�?�? �?�?�?�? �?�?�?�?�?�?�? �?�?�?�?�?�? �?�?�?�?�? �?�?�?�?�?�?');
+      
+      const distribution = await ctx.prisma.$transaction(async (tx) => {
+        const results = [];
+        for (const inv of investors) {
+          const shareAmount = (inv.sharePercentage / 100) * input.amountToDistribute;
+          await tx.investor.update({
+            where: { id: inv.id },
+            data: { totalWithdrawn: { increment: shareAmount } }
+          });
+          results.push({ name: inv.name, share: shareAmount });
+        }
+        return results;
+      });
+
+      await logAudit(ctx.prisma, ctx.user.id, 'PROFIT_DISTRIBUTION', `�?�?�?�? �?�?�?�? �?�?�?�?�?�? �?�?�?�?�? ${input.amountToDistribute} �?.�? �?�?�? �?�?�?�?�?�?�?�?�?`);
+      return distribution;
+    }),
+
+  distributeProfitWithDeductions: adminProcedure
+    .input(z.object({
+      netProfit: z.number(),
+      devDeduction: z.number(),
+      maintDeduction: z.number(),
+      emergencyDeduction: z.number(),
+      stockDeduction: z.number(),
+      marketingDeduction: z.number()
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const totalDeductions = input.devDeduction + input.maintDeduction + input.emergencyDeduction + input.stockDeduction + input.marketingDeduction;
+      const distributableProfit = input.netProfit - totalDeductions;
+      
+      const investors = await ctx.prisma.investor.findMany({ where: { isActive: true } });
+      const totalPercentage = investors.reduce((sum, inv) => sum + inv.sharePercentage, 0);
+      if (totalPercentage === 0) throw new Error('�?�? �?�?�?�? �?�?�?�?�?�?�? �?�?�?�? �?�?�?�?�? �?�?�?�?�?�?');
+
+      return ctx.prisma.$transaction(async (tx) => {
+        const distribution = await tx.profitDistribution.create({
+          data: {
+            netProfit: input.netProfit,
+            devDeduction: input.devDeduction,
+            maintDeduction: input.maintDeduction,
+            emergencyDeduction: input.emergencyDeduction,
+            stockDeduction: input.stockDeduction,
+            marketingDeduction: input.marketingDeduction,
+            totalDeductions,
+            distributableProfit
+          }
+        });
+
+        for (const inv of investors) {
+          const netProfitShare = input.netProfit * (inv.sharePercentage / 100);
+          const deductionsShare = totalDeductions * (inv.sharePercentage / 100);
+          const amountPaid = distributableProfit * (inv.sharePercentage / 100);
+
+          await tx.investorPayout.create({
+            data: {
+              distributionId: distribution.id,
+              investorId: inv.id,
+

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { trpc } from "../utils/trpc";
 import { 
-  Calculator, Save, CheckCircle, CreditCard, Calendar, Users, 
+  Calculator, Printer, Save, CheckCircle, CreditCard, Calendar, Users, 
   TrendingUp, AlertCircle, FileSpreadsheet, Loader2 
 } from "lucide-react";
 
@@ -19,6 +19,10 @@ export default function PayrollPage() {
   const [deductVal, setDeductVal] = useState<number>(0);
   const [advVal, setAdvVal] = useState<number>(0);
   const [noteVal, setNoteVal] = useState("");
+  const [editReasonVal, setEditReasonVal] = useState("");
+  const [printRow, setPrintRow] = useState<any>(null);
+  const printRef = React.useRef<HTMLDivElement>(null);
+  const handlePrint = useReactToPrint({ contentRef: printRef, documentTitle: "Salary_Slip" });
 
   const utils = trpc.useContext();
   const { data: payrollList, isLoading: loadingList } = trpc.getPayrollList.useQuery(
@@ -79,16 +83,22 @@ export default function PayrollPage() {
     setDeductVal(row.manualDeductions || 0);
     setAdvVal(row.advances || 0);
     setNoteVal(row.notes || "");
+    setEditReasonVal(row.editReason || "");
   };
 
   const saveEdit = () => {
     if (!editRow) return;
+    if (!editReasonVal.trim()) {
+      alert("إلزامي: يجب إدخال سبب التعديل لحفظ التغييرات");
+      return;
+    }
     updateDraftMutation.mutate({
       id: editRow.id,
       bonuses: Number(bonusVal),
       deductions: Number(deductVal),
       advances: Number(advVal),
-      notes: noteVal
+      notes: noteVal,
+      editReason: editReasonVal
     });
   };
 
@@ -352,8 +362,18 @@ export default function PayrollPage() {
                 <textarea
                   value={noteVal}
                   onChange={(e) => setNoteVal(e.target.value)}
-                  className="w-full bg-brand-black border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-brand-orange text-sm min-h-[80px]"
-                  placeholder="أدخل سبب المكافأة أو الخصم..."
+                  className="w-full bg-brand-black border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-brand-orange text-sm min-h-[60px]"
+                  placeholder="ملاحظات إضافية..."
+                />
+              </div>
+
+              <div className="space-y-1 md:col-span-4 mt-2">
+                <label className="text-xs text-brand-orange font-bold">سبب التعديل (إلزامي)*</label>
+                <textarea
+                  value={editReasonVal}
+                  onChange={(e) => setEditReasonVal(e.target.value)}
+                  className="w-full bg-brand-black border border-brand-orange/50 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-brand-orange text-sm min-h-[60px]"
+                  placeholder="أدخل سبب المكافأة أو الخصم أو السلفة هنا لتوثيقه..."
                 />
               </div>
             </div>
