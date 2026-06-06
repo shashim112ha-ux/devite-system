@@ -164,7 +164,7 @@ export default function AdminDashboard() {
                  <div className="w-full h-full flex items-center justify-center text-brand-gold animate-pulse text-xs">جاري بناء الرسم البياني...</div>
                ) : (
                  <ResponsiveContainer width="100%" height="100%">
-                   <AreaChart data={reportQuery.data?.chartData}>
+                   <AreaChart data={reportQuery.data}>
                      <defs>
                        <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
                          <stop offset="5%" stopColor="#ff8c00" stopOpacity={0.4}/>
