@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { trpc } from "../utils/trpc";
 import { 
   Calculator, Printer, Save, CheckCircle, CreditCard, Calendar, Users, 
