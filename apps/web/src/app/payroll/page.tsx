@@ -4,9 +4,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import { trpc } from "../utils/trpc";
 import { useReactToPrint } from "react-to-print";
+import Link from "next/link";
 import { 
   Calculator, Printer, Save, CheckCircle, CreditCard, Calendar, Users, 
-  TrendingUp, AlertCircle, FileSpreadsheet, Loader2 
+  TrendingUp, AlertCircle, FileSpreadsheet, Loader2, FileText 
 } from "lucide-react";
 
 export default function PayrollPage() {
@@ -275,7 +276,7 @@ export default function PayrollPage() {
                         {row.notes && <div className="text-[10px] text-gray-500 mt-1 max-w-[120px] truncate">{row.notes}</div>}
                       </td>
                       <td className="p-4 text-center">
-                        <div className="flex items-center justify-center gap-2">
+                        <div className="flex items-center justify-center gap-2 flex-wrap">
                           {isDraft && (
                             <>
                               <button
@@ -304,6 +305,13 @@ export default function PayrollPage() {
                           {isPaid && (
                             <span className="text-gray-500 text-xs">مكتمل</span>
                           )}
+                          <Link
+                            href={`/payroll/employee/${row.user.id}`}
+                            className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 font-bold px-3 py-2 rounded-lg text-xs transition-all flex items-center gap-1"
+                            title="تقرير مفصل"
+                          >
+                            <FileText size={12} /> تقرير
+                          </Link>
                         </div>
                       </td>
                     </tr>

@@ -15,7 +15,11 @@ import {
   Info,
   Calendar,
   Wallet,
-  TrendingDown
+  TrendingDown,
+  CreditCard,
+  Smartphone,
+  Package,
+  CalendarX
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { io } from "socket.io-client";
@@ -34,19 +38,13 @@ export default function AdminDashboard() {
     { id: '1', type: 'info', message: "النظام متصل وبانتظار العمليات الحية.", time: new Date() }
   ]);
 
-  // WebSocket Live alerts listener
   useEffect(() => {
     const socketUrl = process.env.NEXT_PUBLIC_API_URL ? process.env.NEXT_PUBLIC_API_URL.replace('/trpc', '') : (typeof window !== "undefined" ? `http://${window.location.hostname}:4000` : "http://127.0.0.1:4000");
     const socket = io(socketUrl);
 
     socket.on("low_stock_warning", (data) => {
       setNotifications(prev => [
-        {
-          id: String(Date.now() + Math.random()),
-          type: 'warning',
-          message: `انخفاض المخزون: المادة (${data.name}) المتبقي: ${data.quantity} ${data.unit}`,
-          time: new Date()
-        },
+        { id: String(Date.now() + Math.random()), type: 'warning', message: `انخفاض المخزون: المادة (${data.name}) المتبقي: ${data.quantity} ${data.unit}`, time: new Date() },
         ...prev
       ]);
       statsQuery.refetch();
@@ -54,24 +52,14 @@ export default function AdminDashboard() {
 
     socket.on("attendance_event", (data) => {
       setNotifications(prev => [
-        {
-          id: String(Date.now() + Math.random()),
-          type: 'info',
-          message: `حضور وموظفين: تم تسجيل ${data.type === 'CHECK_IN' ? 'حضور' : 'انصراف'} للموظف`,
-          time: new Date()
-        },
+        { id: String(Date.now() + Math.random()), type: 'info', message: `حضور وموظفين: تم تسجيل ${data.type === 'CHECK_IN' ? 'حضور' : 'انصراف'} للموظف`, time: new Date() },
         ...prev
       ]);
     });
 
     socket.on("order_created", (order) => {
       setNotifications(prev => [
-        {
-          id: String(Date.now() + Math.random()),
-          type: 'info',
-          message: `طلب جديد: تم استلام الطلب #${order.orderNumber} بقيمة ${order.total} د.ب`,
-          time: new Date()
-        },
+        { id: String(Date.now() + Math.random()), type: 'info', message: `طلب جديد: تم استلام الطلب #${order.orderNumber} بقيمة ${order.total} د.ب`, time: new Date() },
         ...prev
       ]);
       statsQuery.refetch();
@@ -80,20 +68,13 @@ export default function AdminDashboard() {
 
     socket.on("order_status_updated", (order) => {
       setNotifications(prev => [
-        {
-          id: String(Date.now() + Math.random()),
-          type: 'info',
-          message: `تحديث طلب: الطلب #${order.orderNumber} أصبح بحالة ${order.status}`,
-          time: new Date()
-        },
+        { id: String(Date.now() + Math.random()), type: 'info', message: `تحديث طلب: الطلب #${order.orderNumber} أصبح بحالة ${order.status}`, time: new Date() },
         ...prev
       ]);
       statsQuery.refetch();
     });
 
-    return () => {
-      socket.disconnect();
-    };
+    return () => { socket.disconnect(); };
   }, [statsQuery, reportQuery]);
 
   if (statsQuery.isLoading) {
@@ -117,8 +98,8 @@ export default function AdminDashboard() {
   const data = statsQuery.data;
 
   return (
-    <div className="min-h-screen bg-brand-black p-10 font-sans">
-      <header className="flex justify-between items-center mb-12">
+    <div className="min-h-screen bg-brand-black p-6 md:p-10 font-sans">
+      <header className="flex justify-between items-center mb-10">
         <div>
           <h1 className="text-4xl font-black text-brand-gold">لوحة التحكم الإدارية</h1>
           <p className="text-gray-500 mt-2">متابعة الأداء المالي والتشغيلي بالوقت الحقيقي</p>
@@ -131,17 +112,25 @@ export default function AdminDashboard() {
         </div>
       </header>
 
-      {/* Live Financial Stats Row - Answering Manager's Key Questions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-        <KPIBox title="كم يوجد مال حاليًا؟ (إجمالي الأرصدة)" value={`${(data?.totalBalance || 0).toFixed(2)} د.ب`} icon={<Wallet />} color="blue" />
-        <KPIBox title="كم بعنا اليوم؟ (إجمالي المبيعات)" value={`${(data?.sales || 0).toFixed(2)} د.ب`} icon={<DollarSign />} color="gold" />
-        <KPIBox title="كم صرفنا اليوم؟ (إجمالي المصروفات)" value={`${(data?.totalExpenses || 0).toFixed(2)} د.ب`} icon={<TrendingDown />} color="orange" />
-        <KPIBox title="هل نحن رابحون؟ (صافي الربح)" value={`${(data?.profit || 0).toFixed(2)} د.ب`} icon={<TrendingUp />} color={(data?.profit || 0) >= 0 ? "green" : "orange"} />
+      {/* Top Main KPIs Row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <KPIBox title="إجمالي أرصدة الحسابات" value={`${(data?.totalBalance || 0).toFixed(3)} د.ب`} icon={<Wallet />} color="blue" />
+        <KPIBox title="إجمالي المبيعات اليوم" value={`${(data?.sales || 0).toFixed(3)} د.ب`} icon={<DollarSign />} color="gold" />
+        <KPIBox title="إجمالي المصروفات اليوم" value={`${(data?.totalExpenses || 0).toFixed(3)} د.ب`} icon={<TrendingDown />} color="orange" />
+        <KPIBox title="صافي الربح اليوم" value={`${(data?.profit || 0).toFixed(3)} د.ب`} icon={<TrendingUp />} color={(data?.profit || 0) >= 0 ? "green" : "orange"} />
+      </div>
+
+      {/* Payment Breakdown Row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <PaymentCard label="كاش" value={data?.cash || 0} icon="💵" color="text-green-400" bg="bg-green-500/10" />
+        <PaymentCard label="بطاقة" value={data?.card || 0} icon="💳" color="text-blue-400" bg="bg-blue-500/10" />
+        <PaymentCard label="بنفت" value={data?.benefit || 0} icon="📱" color="text-red-400" bg="bg-red-500/10" />
+        <PaymentCard label="أونلاين" value={data?.online || 0} icon="🌐" color="text-purple-400" bg="bg-purple-500/10" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* Performance Indicators */}
+        {/* Left: Performance + Chart */}
         <div className="lg:col-span-2 space-y-8">
           <div className="bg-brand-navy-light/50 p-8 rounded-[40px] border border-white/5">
              <h3 className="text-xl font-bold mb-8 flex items-center gap-3"><Activity className="text-brand-orange" /> مؤشرات التشغيل الحالية</h3>
@@ -153,13 +142,12 @@ export default function AdminDashboard() {
              </div>
           </div>
 
-          {/* Recharts Analytics Chart */}
+          {/* Weekly Chart */}
           <div className="bg-brand-navy-light/50 p-8 rounded-[40px] border border-white/5">
              <div className="flex justify-between items-center mb-6">
                <h3 className="text-xl font-bold flex items-center gap-3"><BarChart3 className="text-brand-gold" /> مبيعات الأسبوع الأخير</h3>
                <span className="text-xs text-gray-500 flex items-center gap-1"><Calendar size={12} /> تحديث تلقائي</span>
              </div>
-             
              <div className="h-[300px] w-full">
                {reportQuery.isLoading ? (
                  <div className="w-full h-full flex items-center justify-center text-brand-gold animate-pulse text-xs">جاري بناء الرسم البياني...</div>
@@ -184,11 +172,45 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Live Alerts & Notifications */}
-        <div className="space-y-8">
-          <div className="bg-brand-navy-light/50 p-8 rounded-[40px] border border-white/5 flex flex-col h-[580px] overflow-hidden">
+        {/* Right: Alerts + Stock Warnings */}
+        <div className="space-y-6">
+          {/* Low Stock Alert */}
+          {(data?.lowStock?.length ?? 0) > 0 && (
+            <div className="bg-brand-navy-light/50 p-6 rounded-[30px] border border-red-500/20">
+              <h3 className="text-base font-bold mb-4 flex items-center gap-2 text-red-400">
+                <Package size={18} /> مواد على وشك النفاد ({data?.lowStock?.length})
+              </h3>
+              <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                {data?.lowStock?.map((item: any) => (
+                  <div key={item.id} className="flex justify-between items-center bg-red-500/10 px-3 py-2 rounded-xl text-xs">
+                    <span className="text-white font-bold">{item.name}</span>
+                    <span className="text-red-400 font-bold">{item.quantity} {item.unit} / حد: {item.minThreshold}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Near Expiry Alert */}
+          {(data?.nearExpiry?.length ?? 0) > 0 && (
+            <div className="bg-brand-navy-light/50 p-6 rounded-[30px] border border-yellow-500/20">
+              <h3 className="text-base font-bold mb-4 flex items-center gap-2 text-yellow-400">
+                <CalendarX size={18} /> مواد قريبة الانتهاء ({data?.nearExpiry?.length})
+              </h3>
+              <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                {data?.nearExpiry?.map((item: any) => (
+                  <div key={item.id} className="flex justify-between items-center bg-yellow-500/10 px-3 py-2 rounded-xl text-xs">
+                    <span className="text-white font-bold">{item.name}</span>
+                    <span className="text-yellow-400">{item.expiryDate ? new Date(item.expiryDate).toLocaleDateString('ar-SA') : '-'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Live Notifications */}
+          <div className="bg-brand-navy-light/50 p-8 rounded-[40px] border border-white/5 flex flex-col overflow-hidden" style={{ maxHeight: '500px' }}>
              <h3 className="text-xl font-bold mb-6 flex items-center gap-3"><Zap className="text-brand-gold" /> تنبيهات الإدارة الحية</h3>
-             
              <div className="flex-1 overflow-y-auto space-y-4 pr-1">
                 <AnimatePresence>
                   {notifications.map((n) => (
@@ -219,14 +241,26 @@ function KPIBox({ title, value, icon, color, trend }: any) {
     blue: "bg-blue-500/10 text-blue-500",
   };
   return (
-    <motion.div whileHover={{ y: -5 }} className="bg-brand-navy-light p-8 rounded-[35px] border border-white/5">
-      <div className="flex justify-between items-start mb-4">
+    <motion.div whileHover={{ y: -5 }} className="bg-brand-navy-light p-6 rounded-[30px] border border-white/5">
+      <div className="flex justify-between items-start mb-3">
         <div className={`p-3 rounded-2xl ${colors[color]}`}>{icon}</div>
         {trend && <span className="text-[10px] bg-white/5 px-2 py-1 rounded-lg text-green-500">{trend}</span>}
       </div>
       <p className="text-gray-500 text-xs mb-1 font-bold">{title}</p>
-      <h3 className="text-2xl font-black">{value}</h3>
+      <h3 className="text-xl font-black">{value}</h3>
     </motion.div>
+  );
+}
+
+function PaymentCard({ label, value, icon, color, bg }: any) {
+  return (
+    <div className={`${bg} rounded-[25px] p-4 border border-white/5 flex flex-col`}>
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-2xl">{icon}</span>
+        <span className="text-xs text-gray-400 font-bold">{label}</span>
+      </div>
+      <p className={`text-xl font-black ${color}`}>{value.toFixed(3)} <span className="text-xs text-gray-500">د.ب</span></p>
+    </div>
   );
 }
 
@@ -246,7 +280,6 @@ function PerformanceCard({ title, value, icon, color = "text-white" }: any) {
 
 function AlertItem({ type, message, time }: any) {
   const isWarning = type === 'warning';
-  
   return (
     <div className={`flex items-start gap-3 p-4 bg-brand-black/30 rounded-2xl border-r-4 ${isWarning ? 'border-brand-orange' : 'border-blue-500'}`}>
       <div className="mt-0.5">

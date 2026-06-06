@@ -247,27 +247,37 @@ export default function ExpensesPage() {
 
       {/* Analytics Dashboard Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Total expenses & highest expense cards */}
-        <div className="space-y-6">
-          <div className="bg-brand-navy-light/60 p-6 rounded-[30px] border border-white/5 flex flex-col justify-center items-center shadow-lg text-center h-[180px]">
+        {/* Stats Cards */}
+        <div className="space-y-4">
+          <div className="bg-brand-navy-light/60 p-6 rounded-[30px] border border-white/5 flex flex-col justify-center items-center shadow-lg text-center">
              <div className="w-12 h-12 bg-brand-orange/20 text-brand-orange rounded-full flex items-center justify-center mb-3">
                 <Wallet size={24} />
              </div>
-             <p className="text-sm text-gray-400 font-bold mb-1">إجمالي المصروفات ({filterType === 'all' ? 'الكل' : 'للفترة المحددة'})</p>
+             <p className="text-sm text-gray-400 font-bold mb-1">إجمالي المصروفات ({filterType === 'all' ? 'الكل' : filterType === 'daily' ? 'اليوم' : filterType === 'weekly' ? 'الأسبوع' : filterType === 'monthly' ? 'الشهر' : 'المحدد'})</p>
              <h2 className="text-4xl font-black text-white">{analytics?.total ? analytics.total.toFixed(3) : "0.000"} د.ب</h2>
           </div>
 
-          <div className="bg-brand-navy-light/60 p-6 rounded-[30px] border border-white/5 shadow-lg min-h-[180px]">
-             <h3 className="text-sm font-bold text-gray-400 mb-4 flex items-center gap-2">
-                <AlertCircle size={16} className="text-red-500" />
+          <div className="bg-brand-navy-light/60 p-5 rounded-[30px] border border-white/5 shadow-lg">
+            <p className="text-xs text-gray-400 mb-1 font-bold">نسبة المصروفات من المبيعات</p>
+            <div className="flex items-end gap-2">
+              <span className="text-3xl font-black text-brand-gold">{analytics?.percentageOfSales ? analytics.percentageOfSales.toFixed(1) : '0.0'}%</span>
+            </div>
+            <div className="w-full bg-white/5 rounded-full h-2 mt-2">
+              <div className="bg-brand-gold h-2 rounded-full" style={{ width: `${Math.min(analytics?.percentageOfSales || 0, 100)}%` }}></div>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">من إجمالي مبيعات {analytics?.totalSales ? analytics.totalSales.toFixed(3) : '0.000'} د.ب</p>
+          </div>
+
+          <div className="bg-brand-navy-light/60 p-5 rounded-[30px] border border-white/5 shadow-lg">
+             <h3 className="text-xs font-bold text-gray-400 mb-3 flex items-center gap-2">
+                <AlertCircle size={14} className="text-red-500" />
                 أعلى منصرف
              </h3>
              {analytics?.highestExpense ? (
                <div>
-                  <p className="text-2xl font-black text-white">{analytics.highestExpense.amount.toFixed(3)} د.ب</p>
-                  <p className="text-brand-orange font-bold mt-1">{analytics.highestExpense.category}</p>
-                  <p className="text-xs text-gray-500 mt-2 line-clamp-2">{analytics.highestExpense.description || analytics.highestExpense.purpose || "لا يوجد وصف"}</p>
-                  <p className="text-xs text-gray-400 mt-2">{new Date(analytics.highestExpense.date).toLocaleDateString('ar-SA')}</p>
+                  <p className="text-xl font-black text-white">{analytics.highestExpense.amount.toFixed(3)} د.ب</p>
+                  <p className="text-brand-orange font-bold mt-1 text-sm">{analytics.highestExpense.category}</p>
+                  <p className="text-xs text-gray-500 mt-1 line-clamp-2">{analytics.highestExpense.description || analytics.highestExpense.purpose || "لا يوجد وصف"}</p>
                </div>
              ) : (
                <p className="text-gray-500 text-sm">لا توجد مصروفات</p>

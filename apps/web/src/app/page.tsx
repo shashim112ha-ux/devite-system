@@ -430,24 +430,25 @@ function CheckoutOverlay({ cart, total, onClose, onConfirm, phone, setPhone, cus
 
       <div className="flex-1 overflow-y-auto space-y-6">
         {cart.map((item: any, idx: number) => (
-          <div key={idx} className="bg-brand-navy-light p-5 rounded-[30px] border border-white/5 flex flex-col gap-4">
+          <div key={idx} className="bg-brand-navy-light p-5 rounded-[30px] border border-white/5 flex flex-col gap-3">
             <div className="flex gap-4">
-              <div className="w-20 h-20 bg-brand-black rounded-2xl flex items-center justify-center text-3xl">🧋</div>
+              <div className="w-16 h-16 bg-brand-black rounded-2xl flex items-center justify-center text-2xl shrink-0">🧋</div>
               <div className="flex-1">
                 <div className="flex justify-between items-start">
-                  <h4 className="font-bold">{item.name}</h4>
-                  <span className="text-brand-orange font-bold text-sm">{item.price} د.ب</span>
+                  <h4 className="font-bold text-sm">{item.name}</h4>
+                  <span className="text-brand-orange font-bold text-sm">{(item.price * item.quantity).toFixed(3)} د.ب</span>
                 </div>
-                <p className="text-[10px] text-gray-500 mt-1">{item.size} • سكر {item.sugar} • ثلج {item.ice}</p>
+                <p className="text-[10px] text-gray-500 mt-1">{item.size !== '-' ? item.size : ''} {item.sugar !== '-' ? `• سكر ${item.sugar}` : ''} {item.ice !== '-' ? `• ثلج ${item.ice}` : ''}</p>
+                <p className="text-[10px] text-gray-600 mt-0.5">{item.price} د.ب × {item.quantity}</p>
               </div>
             </div>
             <div className="flex justify-between items-center bg-brand-navy p-2 rounded-2xl">
-              <div className="flex items-center gap-4 px-2">
-                <button onClick={() => updateQuantity(item.cartItemId, -1)} className="p-2 text-white/50 hover:text-white bg-white/5 rounded-lg"><Minus size={16}/></button>
-                <span className="font-bold text-sm">{item.quantity}</span>
-                <button onClick={() => updateQuantity(item.cartItemId, 1)} className="p-2 text-white/50 hover:text-white bg-white/5 rounded-lg"><Plus size={16}/></button>
+              <div className="flex items-center gap-3 px-2">
+                <button onClick={() => updateQuantity(item.cartItemId, -1)} className="p-2 text-white/50 hover:text-white bg-white/5 rounded-xl transition-colors"><Minus size={14}/></button>
+                <span className="font-bold text-sm w-6 text-center">{item.quantity}</span>
+                <button onClick={() => updateQuantity(item.cartItemId, 1)} className="p-2 text-white/50 hover:text-white bg-white/5 rounded-xl transition-colors"><Plus size={14}/></button>
               </div>
-              <button onClick={() => removeFromCart(item.cartItemId)} className="p-2 text-red-500/50 hover:text-red-500 bg-red-500/10 rounded-lg text-xs font-bold">حذف</button>
+              <button onClick={() => removeFromCart(item.cartItemId)} className="p-2 px-4 text-red-400 hover:text-red-300 bg-red-500/10 rounded-xl text-xs font-bold transition-colors">🗑 حذف</button>
             </div>
           </div>
         ))}
@@ -489,18 +490,30 @@ function CheckoutOverlay({ cart, total, onClose, onConfirm, phone, setPhone, cus
 
         <div className="space-y-4 pt-6">
            <h3 className="text-brand-gold font-bold text-sm mr-2">طريقة الدفع</h3>
-           <div className="flex gap-4">
+           <div className="grid grid-cols-2 gap-3">
              <button 
                onClick={() => setPaymentMethod('CASH')}
-               className={`flex-1 p-4 rounded-2xl font-bold border transition-all ${paymentMethod === 'CASH' ? 'border-brand-orange bg-brand-orange/10 text-brand-orange' : 'border-white/5 bg-brand-navy-light text-gray-500'}`}
+               className={`p-4 rounded-2xl font-bold border transition-all text-sm ${paymentMethod === 'CASH' ? 'border-brand-orange bg-brand-orange/10 text-brand-orange' : 'border-white/5 bg-brand-navy-light text-gray-500'}`}
              >
-               دفع كاش
+               💵 كاش
              </button>
              <button 
                onClick={() => setPaymentMethod('CARD')}
-               className={`flex-1 p-4 rounded-2xl font-bold border transition-all ${paymentMethod === 'CARD' ? 'border-brand-orange bg-brand-orange/10 text-brand-orange' : 'border-white/5 bg-brand-navy-light text-gray-500'}`}
+               className={`p-4 rounded-2xl font-bold border transition-all text-sm ${paymentMethod === 'CARD' ? 'border-brand-orange bg-brand-orange/10 text-brand-orange' : 'border-white/5 bg-brand-navy-light text-gray-500'}`}
              >
-               دفع بالبطاقة
+               💳 بطاقة
+             </button>
+             <button 
+               onClick={() => setPaymentMethod('BENEFIT')}
+               className={`p-4 rounded-2xl font-bold border transition-all text-sm ${paymentMethod === 'BENEFIT' ? 'border-brand-orange bg-brand-orange/10 text-brand-orange' : 'border-white/5 bg-brand-navy-light text-gray-500'}`}
+             >
+               📱 بنفت
+             </button>
+             <button 
+               onClick={() => setPaymentMethod('ONLINE')}
+               className={`p-4 rounded-2xl font-bold border transition-all text-sm ${paymentMethod === 'ONLINE' ? 'border-brand-orange bg-brand-orange/10 text-brand-orange' : 'border-white/5 bg-brand-navy-light text-gray-500'}`}
+             >
+               🌐 أونلاين
              </button>
            </div>
         </div>

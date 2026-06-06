@@ -722,6 +722,17 @@ export const appRouter = router({
       ? Math.round(readyOrders.reduce((sum, o) => sum + (o.updatedAt.getTime() - o.createdAt.getTime()) / 60000, 0) / readyOrders.length)
       : 0;
 
+    const cash = todayOrders.filter(o => o.paymentMethod === 'CASH').reduce((sum, o) => sum + o.total, 0);
+    const card = todayOrders.filter(o => o.paymentMethod === 'CARD').reduce((sum, o) => sum + o.total, 0);
+    const benefit = todayOrders.filter(o => o.paymentMethod === 'BENEFIT').reduce((sum, o) => sum + o.total, 0);
+    const online = todayOrders.filter(o => o.paymentMethod === 'ONLINE').reduce((sum, o) => sum + o.total, 0);
+
+    const inventory = await ctx.prisma.inventoryItem.findMany();
+    const lowStock = inventory.filter(i => i.quantity <= i.minThreshold).map(i => ({ id: i.id, name: i.name, quantity: i.quantity, unit: i.unit, minThreshold: i.minThreshold }));
+    const sevenDaysFromNow = new Date();
+    sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+    const nearExpiry = inventory.filter(i => i.expiryDate && i.expiryDate <= sevenDaysFromNow).map(i => ({ id: i.id, name: i.name, expiryDate: i.expiryDate, quantity: i.quantity, unit: i.unit }));
+
     return {
       sales,
       ordersCount,
@@ -732,7 +743,13 @@ export const appRouter = router({
       preparingCount: todayOrders.filter(o => o.status === 'PREPARING').length,
       readyCount: todayOrders.filter(o => o.status === 'READY').length,
       topProduct,
-      peakHour
+      peakHour,
+      cash,
+      card,
+      benefit,
+      online,
+      lowStock,
+      nearExpiry
     };
   }),
 
@@ -1973,6 +1990,12 @@ export const appRouter = router({
       const total = expenses.reduce((sum, e) => sum + e.amount, 0);
       const count = expenses.length;
 
+      const sales = await ctx.prisma.order.findMany({
+        where: dateFilter ? { createdAt: dateFilter } : undefined
+      });
+      const totalSales = sales.reduce((sum, o) => sum + o.total, 0);
+      const percentageOfSales = totalSales > 0 ? (total / totalSales) * 100 : 0;
+
       // Group by category
       const categoryGroup: Record<string, number> = {};
       expenses.forEach(e => {
@@ -2005,6 +2028,8 @@ export const appRouter = router({
       return {
         total,
         count,
+        totalSales,
+        percentageOfSales,
         categoryStats,
         highestExpense: highest,
         topSupplier,
