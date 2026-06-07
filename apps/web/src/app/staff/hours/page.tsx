@@ -17,6 +17,8 @@ export default function WorkHoursReportPage() {
   const [editCheckIn, setEditCheckIn] = useState("");
   const [editCheckOut, setEditCheckOut] = useState("");
   const [editReason, setEditReason] = useState("");
+  const [editHours, setEditHours] = useState("");
+  const [editHourlyRate, setEditHourlyRate] = useState("");
   const [showAddRow, setShowAddRow] = useState(false);
   const [addForm, setAddForm] = useState({ userId: "", checkIn: "", checkOut: "", reason: "" });
 
@@ -96,10 +98,12 @@ export default function WorkHoursReportPage() {
   const hourlyRate = employee?.hourlyRate || 0;
   const estimatedSalary = totalHours * hourlyRate;
 
-  const startEdit = (att: any) => {
+  const startEdit = (att: any, empRecord: any, hoursValue: number | null) => {
     setEditingRow(att.id);
     setEditCheckIn(new Date(att.checkIn).toISOString().slice(0, 16));
     setEditCheckOut(att.checkOut ? new Date(att.checkOut).toISOString().slice(0, 16) : "");
+    setEditHours(hoursValue !== null ? String(hoursValue) : "");
+    setEditHourlyRate(String(empRecord?.hourlyRate || 0));
     setEditReason("");
   };
 
@@ -108,11 +112,16 @@ export default function WorkHoursReportPage() {
       alert("يرجى إدخال سبب التعديل");
       return;
     }
+    const overrideH = parseFloat(editHours);
+    const hourlyR = parseFloat(editHourlyRate);
+    
     editMutation.mutate({
       id: editingRow,
       checkIn: new Date(editCheckIn),
       checkOut: editCheckOut ? new Date(editCheckOut) : undefined,
-      reason: editReason
+      reason: editReason,
+      overrideHours: !isNaN(overrideH) && overrideH > 0 ? overrideH : undefined,
+      hourlyRate: !isNaN(hourlyR) && hourlyR > 0 ? hourlyR : undefined,
     });
   };
 
@@ -469,15 +478,25 @@ export default function WorkHoursReportPage() {
                         )}
                       </td>
                       <td className="p-3 font-mono">
-                        {hours !== null ? (
+                        {isEditing ? (
+                          <input type="number" step="0.01" value={editHours} onChange={e => setEditHours(e.target.value)} placeholder="تعديل" className="bg-brand-black border border-brand-gold/50 rounded-lg px-2 py-1 text-xs text-white w-20 focus:outline-none" />
+                        ) : hours !== null ? (
                           <span className={`font-bold ${hours >= 8 ? 'text-green-400' : hours >= 6 ? 'text-yellow-400' : 'text-red-400'}`}>{hours.toFixed(2)} س</span>
                         ) : <span className="text-gray-600">—</span>}
                       </td>
                       <td className="p-3 font-mono text-xs text-gray-400">
-                        {rate > 0 ? `${rate.toFixed(3)} د.ب` : '—'}
+                        {isEditing ? (
+                          <input type="number" step="0.001" value={editHourlyRate} onChange={e => setEditHourlyRate(e.target.value)} placeholder="السعر" className="bg-brand-black border border-brand-gold/50 rounded-lg px-2 py-1 text-xs text-white w-20 focus:outline-none" />
+                        ) : rate > 0 ? (
+                          `${rate.toFixed(3)} د.ب`
+                        ) : '—'}
                       </td>
                       <td className="p-3 font-mono text-brand-gold font-bold">
-                        {pay !== null && pay > 0 ? `${pay.toFixed(3)} د.ب` : '—'}
+                        {isEditing && !isNaN(parseFloat(editHours)) && !isNaN(parseFloat(editHourlyRate)) ? (
+                          `${(parseFloat(editHours) * parseFloat(editHourlyRate)).toFixed(3)} د.ب`
+                        ) : pay !== null && pay > 0 ? (
+                          `${pay.toFixed(3)} د.ب`
+                        ) : '—'}
                       </td>
                       <td className="p-3 text-center">
                         {!checkOut ? (
@@ -502,7 +521,7 @@ export default function WorkHoursReportPage() {
                             </>
                           ) : (
                             <>
-                              <button onClick={() => startEdit(att)} className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 p-1.5 rounded-lg transition-colors"><Edit2 size={14} /></button>
+                              <button onClick={() => startEdit(att, empRecord, hours)} className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 p-1.5 rounded-lg transition-colors"><Edit2 size={14} /></button>
                               <button onClick={() => { if(confirm('هل أنت متأكد من حذف هذا السجل؟')) deleteMutation.mutate({ id: att.id }); }} className="bg-red-500/10 hover:bg-red-500/20 text-red-400 p-1.5 rounded-lg transition-colors"><Trash2 size={14} /></button>
                             </>
                           )}

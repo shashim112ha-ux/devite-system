@@ -57,6 +57,7 @@ export default function ShiftReportPage() {
   const { data: reports, isLoading: loadingReports } = trpc.getShiftReports.useQuery();
   const { data: settings } = trpc.getSystemSettings.useQuery();
   const { data: todayStats } = trpc.getTodayShiftStats.useQuery();
+  const { data: inventoryStats } = trpc.getAdvancedStats.useQuery();
 
   const storedUserId = typeof window !== 'undefined' ? localStorage.getItem('userId') || '' : '';
   const userRole = typeof window !== 'undefined' ? localStorage.getItem('userRole') || '' : '';
@@ -695,6 +696,48 @@ export default function ShiftReportPage() {
               </div>
             </div>
           </div>
+
+          {/* Section 5: Inventory Alerts */}
+          {((inventoryStats?.lowStock?.length ?? 0) > 0 || (inventoryStats?.nearExpiry?.length ?? 0) > 0) && (
+            <div className="space-y-4 pt-4 border-t border-white/5">
+              <h4 className="text-sm font-bold text-white border-r-2 border-red-500 pr-2 flex items-center gap-2">
+                <AlertTriangle size={14} className="text-red-400" /> خامساً: تنبيهات المخزون (تُرفَق تلقائياً بالتقرير)
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {(inventoryStats?.lowStock?.length ?? 0) > 0 && (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4">
+                    <p className="text-xs font-bold text-red-400 mb-3 flex items-center gap-2">
+                      <AlertTriangle size={12} /> مواد على وشك النفاد ({inventoryStats?.lowStock?.length})
+                    </p>
+                    <div className="space-y-2 max-h-[150px] overflow-y-auto">
+                      {inventoryStats?.lowStock?.map((item: any) => (
+                        <div key={item.id} className="flex justify-between items-center text-xs bg-red-500/5 px-3 py-1.5 rounded-lg">
+                          <span className="text-gray-200 font-bold">{item.name}</span>
+                          <span className="text-red-400 font-mono">{item.quantity} {item.unit} / الحد: {item.minThreshold}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {(inventoryStats?.nearExpiry?.length ?? 0) > 0 && (
+                  <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4">
+                    <p className="text-xs font-bold text-yellow-400 mb-3 flex items-center gap-2">
+                      <AlertTriangle size={12} /> مواد قريبة انتهاء الصلاحية ({inventoryStats?.nearExpiry?.length})
+                    </p>
+                    <div className="space-y-2 max-h-[150px] overflow-y-auto">
+                      {inventoryStats?.nearExpiry?.map((item: any) => (
+                        <div key={item.id} className="flex justify-between items-center text-xs bg-yellow-500/5 px-3 py-1.5 rounded-lg">
+                          <span className="text-gray-200 font-bold">{item.name}</span>
+                          <span className="text-yellow-400 font-mono">{item.expiryDate ? new Date(item.expiryDate).toLocaleDateString('ar-SA') : '—'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <p className="text-[10px] text-gray-500">⚠️ هذه التنبيهات تُضاف تلقائياً لتقرير الوردية وتستوجب المتابعة الفورية</p>
+            </div>
+          )}
 
           <div className="flex items-center justify-end gap-3 border-t border-white/5 pt-4">
             <button

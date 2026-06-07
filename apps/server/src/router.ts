@@ -1134,17 +1134,46 @@ export const appRouter = router({
     }),
 
   editAttendance: managerProcedure
-    .input(z.object({ id: z.string(), checkIn: z.date(), checkOut: z.date().optional().nullable(), reason: z.string() }))
+    .input(z.object({ 
+      id: z.string(), 
+      checkIn: z.date(), 
+      checkOut: z.date().optional().nullable(), 
+      reason: z.string(),
+      overrideHours: z.number().optional(),   // if set, override hours directly
+      hourlyRate: z.number().optional(),      // if set, update the employee's hourly rate
+    }))
     .mutation(async ({ input, ctx }) => {
-      const { id, ...data } = input;
+      const { id, overrideHours, hourlyRate, ...data } = input;
+
+      // If overrideHours given, recompute checkOut from checkIn + hours
+      if (overrideHours !== undefined && overrideHours > 0) {
+        const computedCheckOut = new Date(data.checkIn.getTime() + overrideHours * 3600000);
+        data.checkOut = computedCheckOut;
+      }
+
       const att = await ctx.prisma.attendance.update({
         where: { id },
         data: {
-          ...data,
+          checkIn: data.checkIn,
+          checkOut: data.checkOut,
+          reason: data.reason,
           editedById: ctx.user.id
         } as any
       });
-      await logAudit(ctx.prisma, ctx.user.id, 'EDIT_ATTENDANCE', `تعديل سجل حضور للموظف`);
+
+      // If hourly rate given, update the user's hourly rate
+      if (hourlyRate !== undefined) {
+        const attRecord = await ctx.prisma.attendance.findUnique({ where: { id }, select: { userId: true } });
+        if (attRecord) {
+          await ctx.prisma.user.update({
+            where: { id: attRecord.userId },
+            data: { hourlyRate } as any
+          });
+        }
+      }
+
+      await logAudit(ctx.prisma, ctx.user.id, 'EDIT_ATTENDANCE', 
+        `تعديل سجل حضور${overrideHours !== undefined ? ` | الساعات: ${overrideHours}` : ''}${hourlyRate !== undefined ? ` | سعر الساعة: ${hourlyRate}` : ''}`);
       return att;
     }),
 
@@ -1501,11 +1530,13 @@ export const appRouter = router({
         const netSalary = basicSalary + overtimePay;
 
         // Check if there is already a DRAFT record for this user in this period
+        // Use date range match instead of exact equality (strings vs Date mismatch fix)
+        const rangeStart = new Date(startDate); rangeStart.setHours(0,0,0,0);
+        const rangeEnd = new Date(endDate); rangeEnd.setHours(23,59,59,999);
         const existing = await ctx.prisma.payroll.findFirst({
           where: {
             userId: u.id,
-            startDate: input.startDate,
-            endDate: input.endDate,
+            startDate: { gte: rangeStart, lte: new Date(startDate.getTime() + 86400000) },
             status: 'DRAFT'
           }
         });
@@ -1993,9 +2024,69 @@ export const appRouter = router({
 
       return ctx.prisma.expense.findMany({
         where: dateFilter ? { date: dateFilter } : undefined,
-        include: { recordedBy: { select: { name: true } } },
+        include: { recordedBy: { select: { name: true } }, account: true },
         orderBy: { date: 'desc' }
       });
+    }),
+
+  updateDetailedExpense: managerProcedure
+    .input(z.object({
+      id: z.string(),
+      category: z.string().optional(),
+      amount: z.number().optional(),
+      description: z.string().optional(),
+      supplier: z.string().optional(),
+      purpose: z.string().optional(),
+      quantity: z.number().optional(),
+      unitPrice: z.number().optional(),
+      paymentMethod: z.string().optional(),
+      accountId: z.string().optional().nullable(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const { id, ...data } = input;
+
+      // Get old expense to reverse account balance if needed
+      const oldExpense = await ctx.prisma.expense.findUnique({ where: { id } });
+      if (!oldExpense) throw new Error('المصروف غير موجود');
+
+      const qty = data.quantity ?? oldExpense.quantity ?? 1;
+      const price = data.unitPrice ?? oldExpense.unitPrice ?? oldExpense.amount;
+      const newAmount = data.amount ?? (qty * (price || 0));
+
+      const updated = await ctx.prisma.$transaction(async (tx) => {
+        // Reverse old account deduction
+        if (oldExpense.accountId) {
+          await tx.account.update({
+            where: { id: oldExpense.accountId },
+            data: { balance: { increment: oldExpense.amount } } // restore
+          });
+        }
+
+        const exp = await tx.expense.update({
+          where: { id },
+          data: {
+            ...data,
+            amount: newAmount,
+            quantity: qty,
+            unitPrice: price,
+          }
+        });
+
+        // Apply new account deduction
+        const newAccountId = data.accountId !== undefined ? data.accountId : oldExpense.accountId;
+        if (newAccountId) {
+          await tx.account.update({
+            where: { id: newAccountId },
+            data: { balance: { decrement: newAmount } }
+          });
+        }
+
+        return exp;
+      });
+
+      await logAudit(ctx.prisma, ctx.user.id, 'EDIT_EXPENSE',
+        `تعديل مصروف ${updated.category} | المبلغ الجديد: ${newAmount} د.ب`);
+      return updated;
     }),
 
   getExpenseAnalytics: staffProcedure

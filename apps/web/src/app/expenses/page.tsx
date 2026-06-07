@@ -4,7 +4,8 @@ import { useState } from "react";
 import { trpc } from "../../utils/trpc";
 import { 
   TrendingDown, Plus, Sparkles, DollarSign, Tag, Image, 
-  Calendar, FileText, Loader2, AlertCircle, ShoppingBag, Wallet, PieChart as PieChartIcon 
+  Calendar, FileText, Loader2, AlertCircle, ShoppingBag, Wallet, PieChart as PieChartIcon,
+  Edit2, X, Check
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts";
 
@@ -33,6 +34,16 @@ export default function ExpensesPage() {
   const [receiptBase64, setReceiptBase64] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
 
+  // Edit expense state
+  const [editingExpense, setEditingExpense] = useState<any>(null);
+  const [editCategory, setEditCategory] = useState('');
+  const [editPurpose, setEditPurpose] = useState('');
+  const [editSupplier, setEditSupplier] = useState('');
+  const [editQuantity, setEditQuantity] = useState('1');
+  const [editTotalPrice, setEditTotalPrice] = useState('0');
+  const [editPaymentMethod, setEditPaymentMethod] = useState('');
+  const [editAccountId, setEditAccountId] = useState('');
+
   const userRole = typeof window !== 'undefined' ? localStorage.getItem('userRole') : null;
   const isAdminOrManager = userRole === 'ADMIN' || userRole === 'MANAGER';
 
@@ -50,12 +61,52 @@ export default function ExpensesPage() {
     onSuccess: () => {
       utils.getDetailedExpenses.invalidate();
       utils.getExpenseAnalytics.invalidate();
+      utils.getAdvancedStats.invalidate();
       setShowAddForm(false);
       resetForm();
       alert("تم تسجيل المصروف بنجاح!");
     },
     onError: (err) => alert(`خطأ: ${err.message}`)
   });
+
+  const updateExpenseMutation = trpc.updateDetailedExpense.useMutation({
+    onSuccess: () => {
+      utils.getDetailedExpenses.invalidate();
+      utils.getExpenseAnalytics.invalidate();
+      utils.getAdvancedStats.invalidate();
+      setEditingExpense(null);
+    },
+    onError: (err) => alert(`خطأ: ${err.message}`)
+  });
+
+  const openEdit = (expense: any) => {
+    setEditingExpense(expense);
+    setEditCategory(expense.category);
+    setEditPurpose(expense.purpose || '');
+    setEditSupplier(expense.supplier || '');
+    setEditQuantity(String(expense.quantity || 1));
+    setEditTotalPrice(String(expense.amount));
+    setEditPaymentMethod(expense.paymentMethod || 'CASH');
+    setEditAccountId(expense.accountId || '');
+  };
+
+  const saveEdit = () => {
+    if (!editingExpense) return;
+    const qty = parseFloat(editQuantity) || 1;
+    const total = parseFloat(editTotalPrice);
+    if (isNaN(total) || total < 0) { alert('يرجى إدخال مبلغ صحيح'); return; }
+    updateExpenseMutation.mutate({
+      id: editingExpense.id,
+      category: editCategory,
+      purpose: editPurpose || undefined,
+      supplier: editSupplier || undefined,
+      quantity: qty,
+      amount: total,
+      unitPrice: total / qty,
+      paymentMethod: editPaymentMethod,
+      accountId: editAccountId || null,
+    });
+  };
 
   const resetForm = () => {
     setCategory(CATEGORIES[0]);
@@ -112,6 +163,93 @@ export default function ExpensesPage() {
 
   return (
     <div className="p-8 space-y-8 max-w-[1400px] mx-auto">
+
+      {/* Edit Expense Modal */}
+      {editingExpense && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-brand-navy border border-white/10 rounded-[30px] p-8 w-full max-w-lg shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-black text-brand-gold flex items-center gap-2">
+                <Edit2 size={20} /> تعديل المصروف
+              </h2>
+              <button onClick={() => setEditingExpense(null)} className="text-gray-400 hover:text-white p-2 rounded-xl hover:bg-white/5">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-brand-black/50 p-3 rounded-xl text-xs text-gray-400 flex justify-between">
+                <span>تاريخ المصروف: {new Date(editingExpense.date).toLocaleDateString('ar-SA')}</span>
+                <span className="text-brand-gold font-bold">الأصلي: {editingExpense.amount.toFixed(3)} د.ب</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">التصنيف</label>
+                  <select value={editCategory} onChange={e => setEditCategory(e.target.value)} className="w-full bg-brand-black border border-white/10 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-brand-gold">
+                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">طريقة الدفع</label>
+                  <select value={editPaymentMethod} onChange={e => setEditPaymentMethod(e.target.value)} className="w-full bg-brand-black border border-white/10 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-brand-gold">
+                    {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">الغرض</label>
+                <input value={editPurpose} onChange={e => setEditPurpose(e.target.value)} className="w-full bg-brand-black border border-white/10 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-brand-gold" placeholder="الغرض من المصروف" />
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">المورد</label>
+                <input value={editSupplier} onChange={e => setEditSupplier(e.target.value)} className="w-full bg-brand-black border border-white/10 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-brand-gold" placeholder="اسم المورد" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">الكمية</label>
+                  <input type="number" step="0.01" min="0.01" value={editQuantity} onChange={e => setEditQuantity(e.target.value)} className="w-full bg-brand-black border border-white/10 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-brand-gold" />
+                </div>
+                <div>
+                  <label className="text-xs text-brand-gold font-bold block mb-1">المبلغ الإجمالي (د.ب)</label>
+                  <input type="number" step="0.001" min="0" value={editTotalPrice} onChange={e => setEditTotalPrice(e.target.value)} className="w-full bg-brand-black border border-brand-gold/30 rounded-xl px-3 py-2 text-brand-gold font-bold text-lg focus:outline-none focus:border-brand-gold" />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">الحساب المالي</label>
+                <select value={editAccountId} onChange={e => setEditAccountId(e.target.value)} className="w-full bg-brand-black border border-white/10 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-brand-gold">
+                  <option value="">— بدون ربط بحساب —</option>
+                  {accountsList?.map((a: any) => (
+                    <option key={a.id} value={a.id}>{a.name} ({Number(a.balance).toFixed(3)})</option>
+                  ))}
+                </select>
+                {editAccountId && editAccountId !== editingExpense.accountId && (
+                  <p className="text-xs text-orange-400 mt-1">⚠️ سيتم تحديث الرصيد تلقائياً</p>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={saveEdit}
+                  disabled={updateExpenseMutation.isLoading}
+                  className="flex-1 bg-brand-gold text-black font-black py-3 rounded-xl hover:bg-brand-gold/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {updateExpenseMutation.isLoading ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                  حفظ التعديلات
+                </button>
+                <button onClick={() => setEditingExpense(null)} className="flex-1 bg-white/5 text-gray-400 font-bold py-3 rounded-xl hover:bg-white/10">
+                  إلغاء
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/5 pb-6">
         <div>
@@ -390,6 +528,7 @@ export default function ExpensesPage() {
                 <th className="p-4 font-bold text-brand-gold">الإجمالي</th>
                 <th className="p-4 font-medium">الموظف / الدفع</th>
                 <th className="p-4 font-medium text-center">الفاتورة</th>
+                {isAdminOrManager && <th className="p-4 font-medium text-center">تعديل</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 text-sm">
@@ -432,22 +571,33 @@ export default function ExpensesPage() {
                       <div className="text-[10px] text-gray-500 mt-1 flex items-center gap-1">💳 {expense.paymentMethod} ({expense.accountPaidFrom || 'كاش'})</div>
                     </td>
                     <td className="p-4 text-center">
-                      {expense.receiptUrl ? (
-                        <button 
-                          onClick={() => {
-                            const w = window.open();
-                            w?.document.write(`<img src="${expense.receiptUrl}" style="max-width:100%;"/>`);
-                          }}
-                          className="bg-brand-orange/10 text-brand-orange p-2 rounded-lg hover:bg-brand-orange hover:text-black transition-colors inline-block"
-                          title="عرض الفاتورة"
-                        >
-                          <Image size={16} />
-                        </button>
-                      ) : (
-                        <span className="text-gray-600 text-xs">-</span>
+                        {expense.receiptUrl ? (
+                          <button 
+                            onClick={() => {
+                              const w = window.open();
+                              w?.document.write(`<img src="${expense.receiptUrl}" style="max-width:100%;"/>`);
+                            }}
+                            className="bg-brand-orange/10 text-brand-orange p-2 rounded-lg hover:bg-brand-orange hover:text-black transition-colors inline-block"
+                            title="عرض الفاتورة"
+                          >
+                            <Image size={16} />
+                          </button>
+                        ) : (
+                          <span className="text-gray-600 text-xs">-</span>
+                        )}
+                      </td>
+                      {isAdminOrManager && (
+                        <td className="p-4 text-center">
+                          <button
+                            onClick={() => openEdit(expense)}
+                            className="p-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 transition-all opacity-0 group-hover:opacity-100"
+                            title="تعديل المصروف"
+                          >
+                            <Edit2 size={15} />
+                          </button>
+                        </td>
                       )}
-                    </td>
-                  </tr>
+                    </tr>
                 ))
               )}
             </tbody>
