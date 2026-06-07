@@ -24,6 +24,7 @@ import {
   Calendar,
   UserCheck,
   Menu,
+  Clock,
   X
 } from "lucide-react";
 import Link from "next/link";
@@ -151,6 +152,7 @@ function RoleGuard({ children, pathname }: { children: React.ReactNode, pathname
                 <SidebarLink href="/products" icon={<UtensilsCrossed size={18} />} label="إدارة الأصناف" active={pathname === '/products'} />
                 <SidebarLink href="/inventory" icon={<Package size={18} />} label="المخزون الذكي" active={pathname === '/inventory'} />
                 <SidebarLink href="/staff" icon={<Users size={18} />} label="إدارة الموظفين" active={pathname === '/staff'} />
+                <SidebarLink href="/staff/hours" icon={<Clock size={18} />} label="تقرير ساعات العمل" active={pathname === '/staff/hours'} />
                 <SidebarLink href="/payroll" icon={<Wallet size={18} />} label="مسير الرواتب" active={pathname === '/payroll'} />
                 <SidebarLink href="/expenses" icon={<CreditCard size={18} />} label="المصروفات والتحليلات" active={pathname === '/expenses'} />
                 <SidebarLink href="/offers" icon={<Tag size={18} />} label="إدارة العروض" active={pathname === '/offers'} />

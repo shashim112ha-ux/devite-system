@@ -207,14 +207,43 @@ export default function ExpensesPage() {
               </div>
 
               <div className="space-y-2 lg:col-span-2">
-                <label className="text-sm text-gray-400">حساب الدفع (من أين تم الصرف؟)</label>
+                <label className="text-sm text-brand-gold font-bold">💳 حساب الدفع (من أين تم الصرف؟)</label>
                 <select value={accountId} onChange={e => {
-                  setAccountId(e.target.value);
-                  if (e.target.value === "") setAccountPaidFrom("كاش");
-                }} className="w-full bg-brand-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-brand-orange">
-                  <option value="">دفع نقدي حر (كاش)</option>
-                  {accountsList?.map((a: any) => <option key={a.id} value={a.id}>{a.name} ({a.balance} د.ب)</option>)}
+                  const selectedId = e.target.value;
+                  setAccountId(selectedId);
+                  if (selectedId === "") {
+                    setAccountPaidFrom("الخزينة العامة");
+                    setPaymentMethod("CASH");
+                  } else {
+                    const acc = accountsList?.find((a: any) => a.id === selectedId) as any;
+                    if (acc) {
+                      setAccountPaidFrom(acc.name);
+                      // Auto-detect payment method from account name
+                      const name = (acc.name || "").toLowerCase();
+                      if (name.includes('بنفت') || name.includes('benefit')) setPaymentMethod('BENEFIT');
+                      else if (name.includes('بطاقة') || name.includes('card') || name.includes('كارد')) setPaymentMethod('CARD');
+                      else if (name.includes('اونلاين') || name.includes('online') || name.includes('أونلاين')) setPaymentMethod('ONLINE');
+                      else setPaymentMethod('CASH');
+                    }
+                  }
+                }} className="w-full bg-brand-black/50 border border-brand-gold/30 rounded-xl p-3 text-white outline-none focus:border-brand-gold">
+                  <option value="">💵 دفع نقدي حر (الخزينة)</option>
+                  {accountsList?.map((a: any) => <option key={a.id} value={a.id}>{a.name} — رصيد: {Number(a.balance).toFixed(3)} د.ب</option>)}
                 </select>
+                {accountId && (
+                  <p className="text-xs text-green-400 mt-1">✓ سيُخصم من: {accountsList?.find((a: any) => a.id === accountId) ? (accountsList.find((a: any) => a.id === accountId) as any).name : ''} | طريقة الدفع: {paymentMethod}</p>
+                )}
+              </div>
+
+              <div className="space-y-2 lg:col-span-1">
+                <label className="text-sm text-gray-400">🏷️ ربط بصنف في المخزون (اختياري)</label>
+                <select value={inventoryItemId} onChange={e => setInventoryItemId(e.target.value)} className="w-full bg-brand-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-brand-orange">
+                  <option value="">— لا يوجد ربط بالمخزون —</option>
+                  {inventoryList?.map((inv: any) => <option key={inv.id} value={inv.id}>{inv.name} ({inv.unit}) — سعر حالي: {Number(inv.unitPrice).toFixed(3)} د.ب</option>)}
+                </select>
+                {inventoryItemId && (
+                  <p className="text-xs text-brand-gold mt-1">📦 سيتم تحديث المخزون بالكمية المدخلة مع إعادة حساب متوسط السعر</p>
+                )}
               </div>
 
               <div className="space-y-2 lg:col-span-3">

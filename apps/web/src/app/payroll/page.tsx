@@ -75,9 +75,9 @@ export default function PayrollPage() {
       return;
     }
     calculateMutation.mutate({
-      startDate: new Date(startDate),
-      endDate: new Date(endDate)
-    });
+      startDate: startDate,
+      endDate: endDate
+    } as any);
   };
 
   const startEdit = (row: any) => {

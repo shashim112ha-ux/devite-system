@@ -94,12 +94,12 @@ export default function SalesPage() {
                     <span className="w-8 h-8 rounded-full bg-brand-black flex items-center justify-center font-bold text-gray-400 text-xs">{idx + 1}</span>
                     <div>
                       <p className="font-bold text-white">{p.name}</p>
-                      <p className="text-xs text-gray-500">{p.count} عنصر مباع</p>
+                      <p className="text-xs text-gray-500">{p.count || 0} عنصر مباع</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-black text-brand-gold">{p.sales.toFixed(3)} د.ب</p>
-                    <p className="text-xs text-green-500">الربح: {p.profit.toFixed(3)} د.ب</p>
+                    <p className="font-black text-brand-gold">{(p.sales || 0).toFixed(3)} د.ب</p>
+                    <p className="text-xs text-green-500">الربح: {(p.profit || 0).toFixed(3)} د.ب</p>
                   </div>
                 </div>
               ))

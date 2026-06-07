@@ -1412,22 +1412,25 @@ export const appRouter = router({
     }),
 
   calculatePayrollForPeriod: managerProcedure
-    .input(z.object({ startDate: z.date(), endDate: z.date() }))
+    .input(z.object({ startDate: z.union([z.date(), z.string()]), endDate: z.union([z.date(), z.string()]) }))
     .mutation(async ({ input, ctx }) => {
+      const startDate = new Date(input.startDate);
+      const endDate = new Date(input.endDate);
+      endDate.setHours(23, 59, 59, 999);
       const staff = await ctx.prisma.user.findMany({
         where: { active: true },
         include: { attendance: true }
       });
 
       const dayInMs = 24 * 60 * 60 * 1000;
-      const totalPeriodDays = Math.max(1, Math.round((input.endDate.getTime() - input.startDate.getTime()) / dayInMs) + 1);
+      const totalPeriodDays = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / dayInMs) + 1);
 
       const payrolls = [];
 
       for (const u of staff) {
         // Filter attendance records in period
         const periodAttendance = u.attendance.filter(att => 
-          att.checkIn >= input.startDate && att.checkIn <= input.endDate
+          att.checkIn >= startDate && att.checkIn <= endDate
         );
 
         // Presence Days
@@ -1512,7 +1515,7 @@ export const appRouter = router({
         payrolls.push(pr);
       }
 
-      await logAudit(ctx.prisma, ctx.user.id, 'CALCULATE_PAYROLL', `احتساب رواتب الموظفين للفترة من ${input.startDate.toLocaleDateString('ar-BH')} إلى ${input.endDate.toLocaleDateString('ar-BH')}`);
+      await logAudit(ctx.prisma, ctx.user.id, 'CALCULATE_PAYROLL', `احتساب رواتب الموظفين للفترة من ${startDate.toLocaleDateString('ar-BH')} إلى ${endDate.toLocaleDateString('ar-BH')}`);
       return payrolls;
     }),
 
@@ -1891,11 +1894,22 @@ export const appRouter = router({
         }
 
         if (input.inventoryItemId) {
+          // Weighted average price calculation
+          const existingItem = await tx.inventoryItem.findUnique({ 
+            where: { id: input.inventoryItemId } 
+          });
+          let newUnitPrice = price;
+          if (existingItem && existingItem.quantity > 0) {
+            // Weighted average: (old_qty * old_price + new_qty * new_price) / (old_qty + new_qty)
+            newUnitPrice = (
+              (existingItem.quantity * existingItem.unitPrice) + (qty * price)
+            ) / (existingItem.quantity + qty);
+          }
           await tx.inventoryItem.update({
             where: { id: input.inventoryItemId },
             data: { 
               quantity: { increment: qty },
-              unitPrice: price
+              unitPrice: newUnitPrice
             }
           });
           await tx.purchaseRecord.create({
@@ -2269,7 +2283,11 @@ export const appRouter = router({
     }),
 
   getSalesAnalytics: staffProcedure
-    .input(z.object({ filterType: z.string().optional() }).optional())
+    .input(z.object({ 
+      filterType: z.string().optional(),
+      startDate: z.string().optional(),
+      endDate: z.string().optional()
+    }).optional())
     .query(async ({ input, ctx }) => {
       let dateFilter: any = undefined;
       if (input?.filterType && input.filterType !== 'all') {
@@ -2277,7 +2295,13 @@ export const appRouter = router({
         start.setHours(0, 0, 0, 0);
         if (input.filterType === 'weekly') start.setDate(start.getDate() - 7);
         if (input.filterType === 'monthly') start.setMonth(start.getMonth() - 1);
-        dateFilter = { gte: start };
+        if (input.filterType === 'custom' && input.startDate && input.endDate) {
+          const s = new Date(input.startDate); s.setHours(0,0,0,0);
+          const e = new Date(input.endDate); e.setHours(23,59,59,999);
+          dateFilter = { gte: s, lte: e };
+        } else {
+          dateFilter = { gte: start };
+        }
       }
       const orders = await ctx.prisma.order.findMany({
         where: dateFilter ? { createdAt: dateFilter } : undefined,
@@ -2285,21 +2309,25 @@ export const appRouter = router({
       });
       const totalSales = orders.reduce((sum, o) => sum + o.total, 0);
       let totalCost = 0;
-      const productCounts: Record<string, { name: string, quantity: number }> = {};
+      const productMap: Record<string, { name: string, count: number, sales: number, profit: number }> = {};
       
       orders.forEach(o => {
         o.items.forEach(i => {
-          totalCost += i.product.cost * i.quantity;
-          if (!productCounts[i.product.name]) {
-            productCounts[i.product.name] = { name: i.product.name, quantity: 0 };
+          const itemSales = (i.price || i.product.price) * i.quantity;
+          const itemCost = (i.product.cost || 0) * i.quantity;
+          totalCost += itemCost;
+          if (!productMap[i.product.id]) {
+            productMap[i.product.id] = { name: i.product.name, count: 0, sales: 0, profit: 0 };
           }
-          productCounts[i.product.name].quantity += i.quantity;
+          productMap[i.product.id].count += i.quantity;
+          productMap[i.product.id].sales += itemSales;
+          productMap[i.product.id].profit += (itemSales - itemCost);
         });
       });
       
-      const topProducts = Object.values(productCounts)
-        .sort((a, b) => b.quantity - a.quantity)
-        .slice(0, 5);
+      const topProducts = Object.values(productMap)
+        .sort((a, b) => b.sales - a.sales)
+        .slice(0, 10);
 
       return {
         totalSales,
