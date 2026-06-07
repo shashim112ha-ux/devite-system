@@ -640,18 +640,46 @@ export const appRouter = router({
       notes: z.string().optional(),
       paymentMethod: z.string().optional(),
       status: z.string().optional(),
+      total: z.number().optional(),
+      fromAccountId: z.string().optional().nullable(),
+      toAccountId: z.string().optional().nullable(),
     }))
     .mutation(async ({ input, ctx }) => {
-      const { id, ...data } = input;
-      const order = await ctx.prisma.order.update({
-        where: { id },
-        data,
-        include: { items: { include: { product: true } }, customer: true }
+      const { id, fromAccountId, toAccountId, ...data } = input;
+
+      const oldOrder = await ctx.prisma.order.findUnique({ where: { id } });
+      if (!oldOrder) throw new Error('الطلب غير موجود');
+
+      const order = await ctx.prisma.$transaction(async (tx) => {
+        const updated = await tx.order.update({
+          where: { id },
+          data,
+          include: { items: { include: { product: true } }, customer: true }
+        });
+
+        // Handle account transfer if payment method changed
+        if (fromAccountId && toAccountId && fromAccountId !== toAccountId) {
+          const amount = data.total ?? oldOrder.total;
+          // Deduct from old account, add to new account
+          await tx.account.update({ where: { id: fromAccountId }, data: { balance: { decrement: amount } } });
+          await tx.account.update({ where: { id: toAccountId }, data: { balance: { increment: amount } } });
+        } else if (toAccountId && !fromAccountId && data.total && data.total !== oldOrder.total) {
+          // Adjust amount difference in the account
+          const diff = data.total - oldOrder.total;
+          await tx.account.update({ where: { id: toAccountId }, data: { balance: { increment: diff } } });
+        }
+
+        return updated;
       });
+
       io?.emit('order_status_updated', order);
-      await logAudit(ctx.prisma, ctx.user.id, 'UPDATE_ORDER', `تحديث الطلب #${order.orderNumber}`);
+      await logAudit(ctx.prisma, ctx.user.id, 'UPDATE_ORDER', 
+        `تعديل الطلب #${order.orderNumber} | طريقة الدفع: ${data.paymentMethod || oldOrder.paymentMethod}${
+          data.total !== undefined ? ` | المبلغ: ${data.total} د.ب` : ''
+        }${fromAccountId && toAccountId ? ` | تحويل من حساب إلى آخر` : ''}`);
       return order;
     }),
+
 
   deleteOrder: adminProcedure
     .input(z.object({ id: z.string() }))
@@ -733,6 +761,8 @@ export const appRouter = router({
     sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
     const nearExpiry = inventory.filter(i => i.expiryDate && i.expiryDate <= sevenDaysFromNow).map(i => ({ id: i.id, name: i.name, expiryDate: i.expiryDate, quantity: i.quantity, unit: i.unit }));
 
+    const accountsBreakdown = accounts.map(acc => ({ id: acc.id, name: acc.name, type: acc.type, balance: acc.balance }));
+
     return {
       sales,
       ordersCount,
@@ -748,6 +778,7 @@ export const appRouter = router({
       card,
       benefit,
       online,
+      accountsBreakdown,
       lowStock,
       nearExpiry
     };
@@ -2232,7 +2263,13 @@ export const appRouter = router({
     }),
 
   getAuditLogs: adminProcedure
-    .input(z.object({ filterType: z.string().optional() }).optional())
+    .input(z.object({ 
+      filterType: z.string().optional(),
+      startDate: z.string().optional(),
+      endDate: z.string().optional(),
+      search: z.string().optional(),
+      limit: z.number().optional()
+    }).optional())
     .query(async ({ input, ctx }) => {
       let dateFilter: any = undefined;
       
@@ -2240,24 +2277,42 @@ export const appRouter = router({
         const now = new Date();
         const start = new Date();
         start.setHours(0, 0, 0, 0);
+        const end = new Date();
+        end.setHours(23, 59, 59, 999);
         
-        if (input.filterType === 'daily') {
+        if (input.filterType === 'today') {
           // already set to today
         } else if (input.filterType === 'weekly') {
           start.setDate(now.getDate() - 7);
         } else if (input.filterType === 'monthly') {
           start.setMonth(now.getMonth() - 1);
+        } else if (input.filterType === 'custom' && input.startDate && input.endDate) {
+          start.setTime(new Date(input.startDate).getTime());
+          start.setHours(0, 0, 0, 0);
+          end.setTime(new Date(input.endDate).getTime());
+          end.setHours(23, 59, 59, 999);
         }
         
-        dateFilter = { gte: start };
+        dateFilter = { gte: start, lte: end };
       }
 
       return ctx.prisma.auditLog.findMany({
-        where: dateFilter ? { createdAt: dateFilter } : undefined,
+        where: {
+          ...(dateFilter ? { createdAt: dateFilter } : {}),
+          ...(input?.search ? { 
+            OR: [
+              { details: { contains: input.search } },
+              { action: { contains: input.search } },
+              { user: { name: { contains: input.search } } }
+            ]
+          } : {})
+        },
         include: { user: { select: { name: true, role: true } } },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
+        take: input?.limit ?? 200
       });
     }),
+
 
   getBackupLogs: adminProcedure.query(async () => {
     // Return empty array or mock data since backups are filesystem-based

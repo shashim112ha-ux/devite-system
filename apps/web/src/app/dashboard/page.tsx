@@ -120,12 +120,29 @@ export default function AdminDashboard() {
         <KPIBox title="صافي الربح اليوم" value={`${(data?.profit || 0).toFixed(3)} د.ب`} icon={<TrendingUp />} color={(data?.profit || 0) >= 0 ? "green" : "orange"} />
       </div>
 
-      {/* Payment Breakdown Row */}
+      {/* Accounts Breakdown Row - Real Accounts */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <PaymentCard label="كاش" value={data?.cash || 0} icon="💵" color="text-green-400" bg="bg-green-500/10" />
-        <PaymentCard label="بطاقة" value={data?.card || 0} icon="💳" color="text-blue-400" bg="bg-blue-500/10" />
-        <PaymentCard label="بنفت" value={data?.benefit || 0} icon="📱" color="text-red-400" bg="bg-red-500/10" />
-        <PaymentCard label="أونلاين" value={data?.online || 0} icon="🌐" color="text-purple-400" bg="bg-purple-500/10" />
+        {(data?.accountsBreakdown && data.accountsBreakdown.length > 0) ? (
+          data.accountsBreakdown.map((acc: any) => {
+            const typeConfig: Record<string, { icon: string; color: string; bg: string }> = {
+              CASH: { icon: '💵', color: 'text-green-400', bg: 'bg-green-500/10' },
+              BANK: { icon: '🏦', color: 'text-blue-400', bg: 'bg-blue-500/10' },
+              BENEFIT: { icon: '📱', color: 'text-red-400', bg: 'bg-red-500/10' },
+              ONLINE: { icon: '🌐', color: 'text-purple-400', bg: 'bg-purple-500/10' },
+            };
+            const cfg = typeConfig[acc.type] || { icon: '💳', color: 'text-brand-gold', bg: 'bg-brand-gold/10' };
+            return (
+              <PaymentCard key={acc.id} label={acc.name} value={acc.balance} icon={cfg.icon} color={cfg.color} bg={cfg.bg} />
+            );
+          })
+        ) : (
+          <>
+            <PaymentCard label="كاش" value={data?.cash || 0} icon="💵" color="text-green-400" bg="bg-green-500/10" />
+            <PaymentCard label="بطاقة" value={data?.card || 0} icon="💳" color="text-blue-400" bg="bg-blue-500/10" />
+            <PaymentCard label="بنفت" value={data?.benefit || 0} icon="📱" color="text-red-400" bg="bg-red-500/10" />
+            <PaymentCard label="أونلاين" value={data?.online || 0} icon="🌐" color="text-purple-400" bg="bg-purple-500/10" />
+          </>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

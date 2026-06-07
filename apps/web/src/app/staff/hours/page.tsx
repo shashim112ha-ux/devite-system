@@ -5,7 +5,7 @@ import { trpc } from "../../utils/trpc";
 import { useReactToPrint } from "react-to-print";
 import { 
   Clock, Calendar, Printer, Edit2, Check, X, 
-  User, Plus, Trash2, Filter, ChevronDown, Save
+  Plus, Trash2, Save, DollarSign, Settings
 } from "lucide-react";
 
 export default function WorkHoursReportPage() {
@@ -20,11 +20,16 @@ export default function WorkHoursReportPage() {
   const [showAddRow, setShowAddRow] = useState(false);
   const [addForm, setAddForm] = useState({ userId: "", checkIn: "", checkOut: "", reason: "" });
 
+  // Employee hourly rate editor
+  const [editingStaffRate, setEditingStaffRate] = useState<any>(null);
+  const [newHourlyRate, setNewHourlyRate] = useState("");
+  const [newSalary, setNewSalary] = useState("");
+
   const printRef = useRef<HTMLDivElement>(null);
   const handlePrint = useReactToPrint({ contentRef: printRef, documentTitle: "تقرير_ساعات_العمل" });
 
   const utils = trpc.useContext();
-  const { data: staffList } = trpc.getStaff.useQuery();
+  const { data: staffList, refetch: refetchStaff } = trpc.getStaff.useQuery();
   const { data: attendance, isLoading } = trpc.getAttendanceHistory.useQuery({ 
     userId: selectedUser || undefined 
   });
@@ -51,6 +56,14 @@ export default function WorkHoursReportPage() {
     onError: (err) => alert(`خطأ: ${err.message}`)
   });
 
+  const updateStaffMutation = trpc.updateStaff.useMutation({
+    onSuccess: () => {
+      refetchStaff();
+      setEditingStaffRate(null);
+    },
+    onError: (err) => alert(`خطأ: ${err.message}`)
+  });
+
   // Filter attendance by date
   const filteredAttendance = (attendance || []).filter(att => {
     const d = new Date(att.checkIn);
@@ -71,7 +84,7 @@ export default function WorkHoursReportPage() {
     return true;
   });
 
-  // Calculate total hours per employee
+  // Calculate total hours
   const totalHours = filteredAttendance.reduce((sum, att) => {
     if (att.checkOut) {
       return sum + (new Date(att.checkOut).getTime() - new Date(att.checkIn).getTime()) / 3600000;
@@ -80,7 +93,8 @@ export default function WorkHoursReportPage() {
   }, 0);
 
   const employee = staffList?.find(u => u.id === selectedUser) as any;
-  const estimatedSalary = employee ? totalHours * (employee.hourlyRate || 0) : 0;
+  const hourlyRate = employee?.hourlyRate || 0;
+  const estimatedSalary = totalHours * hourlyRate;
 
   const startEdit = (att: any) => {
     setEditingRow(att.id);
@@ -102,8 +116,99 @@ export default function WorkHoursReportPage() {
     });
   };
 
+  const openEditStaffRate = (emp: any) => {
+    setEditingStaffRate(emp);
+    setNewHourlyRate(String(emp.hourlyRate || 0));
+    setNewSalary(String(emp.salary || 0));
+  };
+
+  const saveStaffRate = () => {
+    if (!editingStaffRate) return;
+    updateStaffMutation.mutate({
+      id: editingStaffRate.id,
+      name: editingStaffRate.name,
+      phone: editingStaffRate.phone || '',
+      email: editingStaffRate.email || undefined,
+      role: editingStaffRate.role,
+      salary: parseFloat(newSalary) || editingStaffRate.salary,
+      hourlyRate: parseFloat(newHourlyRate) || 0,
+      active: editingStaffRate.active ?? true,
+    } as any);
+  };
+
   return (
     <div className="p-8 max-w-[1400px] mx-auto space-y-6">
+      {/* Edit Staff Rate Modal */}
+      {editingStaffRate && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-brand-navy border border-white/10 rounded-[30px] p-8 w-full max-w-md shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-black text-brand-gold flex items-center gap-2">
+                <Settings size={20} /> تعديل بيانات الموظف
+              </h2>
+              <button onClick={() => setEditingStaffRate(null)} className="text-gray-400 hover:text-white p-2 rounded-xl hover:bg-white/5">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="bg-brand-black/50 p-4 rounded-2xl flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-brand-gold/20 flex items-center justify-center text-brand-gold font-black text-lg">
+                  {editingStaffRate.name?.charAt(0)}
+                </div>
+                <div>
+                  <p className="font-black text-white">{editingStaffRate.name}</p>
+                  <p className="text-xs text-gray-500">{editingStaffRate.role}</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-400 font-bold block mb-2">⏰ سعر الساعة الواحدة (د.ب)</label>
+                <input
+                  type="number"
+                  step="0.001"
+                  value={newHourlyRate}
+                  onChange={e => setNewHourlyRate(e.target.value)}
+                  className="w-full bg-brand-black border border-brand-gold/30 rounded-xl px-4 py-3 text-white text-lg font-bold focus:outline-none focus:border-brand-gold"
+                  placeholder="0.000"
+                />
+                {parseFloat(newHourlyRate) > 0 && (
+                  <p className="text-xs text-green-400 mt-1">
+                    ✓ الراتب المتوقع حسب الساعات الحالية: {(totalHours * parseFloat(newHourlyRate)).toFixed(3)} د.ب
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-400 font-bold block mb-2">💰 الراتب الشهري الثابت (د.ب)</label>
+                <input
+                  type="number"
+                  step="0.001"
+                  value={newSalary}
+                  onChange={e => setNewSalary(e.target.value)}
+                  className="w-full bg-brand-black border border-white/10 rounded-xl px-4 py-3 text-white text-lg font-bold focus:outline-none focus:border-brand-gold"
+                  placeholder="0.000"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={saveStaffRate}
+                  disabled={updateStaffMutation.isLoading}
+                  className="flex-1 bg-brand-gold text-black font-black py-3 rounded-xl hover:bg-brand-gold/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {updateStaffMutation.isLoading ? <Clock size={16} className="animate-spin" /> : <Check size={16} />}
+                  حفظ التغييرات
+                </button>
+                <button onClick={() => setEditingStaffRate(null)} className="flex-1 bg-white/5 text-gray-400 font-bold py-3 rounded-xl hover:bg-white/10 transition-colors">
+                  إلغاء
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
@@ -161,6 +266,45 @@ export default function WorkHoursReportPage() {
         )}
       </div>
 
+      {/* Employee Rate Panel - shown when single employee selected */}
+      {selectedUser && employee && (
+        <div className="bg-gradient-to-l from-brand-gold/10 to-transparent border border-brand-gold/20 rounded-2xl p-5 flex items-center justify-between">
+          <div className="flex items-center gap-5">
+            <div className="w-12 h-12 rounded-full bg-brand-gold/20 flex items-center justify-center text-brand-gold font-black text-lg">
+              {employee.name?.charAt(0)}
+            </div>
+            <div>
+              <p className="font-black text-white text-lg">{employee.name}</p>
+              <p className="text-xs text-gray-500">{employee.role}</p>
+            </div>
+            <div className="flex gap-6 mr-4">
+              <div>
+                <p className="text-xs text-gray-500">سعر الساعة</p>
+                <p className="text-lg font-black text-brand-gold">{hourlyRate.toFixed(3)} <span className="text-xs">د.ب/س</span></p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">الراتب الثابت</p>
+                <p className="text-lg font-black text-white">{(employee.salary || 0).toFixed(3)} <span className="text-xs">د.ب</span></p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">مجموع الساعات ({filterType === 'monthly' ? 'الشهر' : 'الفترة'})</p>
+                <p className="text-lg font-black text-blue-400">{totalHours.toFixed(2)} <span className="text-xs">ساعة</span></p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">الراتب المحسوب</p>
+                <p className="text-lg font-black text-brand-orange">{estimatedSalary.toFixed(3)} <span className="text-xs">د.ب</span></p>
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => openEditStaffRate(employee)}
+            className="flex items-center gap-2 bg-brand-gold text-black font-bold px-5 py-2.5 rounded-xl hover:bg-brand-gold/90 transition-colors text-sm"
+          >
+            <Edit2 size={15} /> تعديل السعر والراتب
+          </button>
+        </div>
+      )}
+
       {/* Summary Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-brand-navy-light/50 border border-white/5 rounded-2xl p-4 text-center">
@@ -173,23 +317,31 @@ export default function WorkHoursReportPage() {
         </div>
         <div className="bg-brand-navy-light/50 border border-white/5 rounded-2xl p-4 text-center">
           <p className="text-xs text-gray-400 mb-1">إجمالي الساعات</p>
-          <p className="text-2xl font-black text-brand-gold">{totalHours.toFixed(1)} س</p>
+          <p className="text-2xl font-black text-brand-gold">{totalHours.toFixed(1)} <span className="text-sm">س</span></p>
         </div>
         <div className={`bg-brand-navy-light/50 border border-white/5 rounded-2xl p-4 text-center ${!selectedUser ? 'opacity-50' : ''}`}>
           <p className="text-xs text-gray-400 mb-1">الراتب المتوقع</p>
-          <p className="text-2xl font-black text-brand-orange">{estimatedSalary.toFixed(3)} د.ب</p>
+          <p className="text-2xl font-black text-brand-orange">{estimatedSalary.toFixed(3)} <span className="text-xs">د.ب</span></p>
           {!selectedUser && <p className="text-[10px] text-gray-600 mt-1">اختر موظفاً</p>}
         </div>
       </div>
 
       {/* Add Row Button */}
-      <div className="flex justify-end">
+      <div className="flex justify-between items-center">
         <button
           onClick={() => { setShowAddRow(true); setAddForm({ userId: selectedUser || (staffList?.[0]?.id || ""), checkIn: "", checkOut: "", reason: "" }); }}
           className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white font-bold px-5 py-2.5 rounded-xl transition-colors text-sm"
         >
           <Plus size={16} /> إضافة سجل حضور جديد
         </button>
+
+        {/* Staff Rate Quick Edit - for all staff */}
+        {!selectedUser && (
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <DollarSign size={14} />
+            <span>اختر موظفاً لتعديل سعر الساعة والراتب</span>
+          </div>
+        )}
       </div>
 
       {/* Add Row Form */}
@@ -240,7 +392,9 @@ export default function WorkHoursReportPage() {
         
         <div className="hidden print:block text-center mb-4 border-b pb-3">
           <h1 className="text-xl font-bold">تقرير ساعات العمل التفصيلي</h1>
-          <p className="text-sm text-gray-500">{employee ? `الموظف: ${employee.name}` : 'جميع الموظفين'} | طبع في: {new Date().toLocaleDateString('ar-SA')}</p>
+          <p className="text-sm text-gray-500">
+            {employee ? `الموظف: ${employee.name} | سعر الساعة: ${hourlyRate.toFixed(3)} د.ب` : 'جميع الموظفين'} | طبع في: {new Date().toLocaleDateString('ar-SA')}
+          </p>
         </div>
 
         <div className="bg-brand-navy border border-white/5 rounded-[30px] overflow-hidden shadow-xl">
@@ -260,28 +414,39 @@ export default function WorkHoursReportPage() {
                   <th className="p-3">وقت الحضور</th>
                   <th className="p-3">وقت الانصراف</th>
                   <th className="p-3">ساعات العمل</th>
+                  <th className="p-3">سعر الساعة</th>
                   <th className="p-3">الراتب المستحق</th>
                   <th className="p-3 text-center">الحالة</th>
-                  <th className="p-3 text-center no-print">ملاحظة / سبب</th>
+                  <th className="p-3 text-center no-print">ملاحظة</th>
                   <th className="p-3 text-center no-print">تعديل</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
                 {isLoading ? (
-                  <tr><td colSpan={9} className="p-10 text-center text-brand-gold animate-pulse">جاري التحميل...</td></tr>
+                  <tr><td colSpan={10} className="p-10 text-center text-brand-gold animate-pulse">جاري التحميل...</td></tr>
                 ) : filteredAttendance.length === 0 ? (
-                  <tr><td colSpan={9} className="p-12 text-center text-gray-500">لا توجد سجلات في هذه الفترة</td></tr>
+                  <tr><td colSpan={10} className="p-12 text-center text-gray-500">لا توجد سجلات في هذه الفترة</td></tr>
                 ) : filteredAttendance.map((att: any) => {
                   const checkIn = new Date(att.checkIn);
                   const checkOut = att.checkOut ? new Date(att.checkOut) : null;
                   const hours = checkOut ? (checkOut.getTime() - checkIn.getTime()) / 3600000 : null;
-                  const empRate = staffList?.find(u => u.id === att.userId) as any;
-                  const pay = hours && empRate ? hours * (empRate.hourlyRate || 0) : null;
+                  const empRecord = staffList?.find(u => u.id === att.userId) as any;
+                  const rate = empRecord?.hourlyRate || 0;
+                  const pay = hours !== null ? hours * rate : null;
                   const isEditing = editingRow === att.id;
 
                   return (
                     <tr key={att.id} className={`hover:bg-white/[0.02] transition-colors ${isEditing ? 'bg-brand-gold/5' : ''}`}>
-                      <td className="p-3 font-bold text-white">{att.user?.name}</td>
+                      <td className="p-3">
+                        <div className="font-bold text-white">{att.user?.name}</div>
+                        <button 
+                          onClick={() => openEditStaffRate(empRecord)} 
+                          className="text-[10px] text-brand-gold hover:text-brand-orange flex items-center gap-1 mt-0.5 no-print"
+                          title="تعديل سعر الساعة"
+                        >
+                          <Edit2 size={10} /> {rate > 0 ? `${rate.toFixed(3)} د.ب/س` : 'تحديد السعر'}
+                        </button>
+                      </td>
                       <td className="p-3">
                         <div className="text-white text-xs font-bold">{checkIn.toLocaleDateString('ar-SA', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</div>
                       </td>
@@ -308,8 +473,11 @@ export default function WorkHoursReportPage() {
                           <span className={`font-bold ${hours >= 8 ? 'text-green-400' : hours >= 6 ? 'text-yellow-400' : 'text-red-400'}`}>{hours.toFixed(2)} س</span>
                         ) : <span className="text-gray-600">—</span>}
                       </td>
+                      <td className="p-3 font-mono text-xs text-gray-400">
+                        {rate > 0 ? `${rate.toFixed(3)} د.ب` : '—'}
+                      </td>
                       <td className="p-3 font-mono text-brand-gold font-bold">
-                        {pay !== null ? `${pay.toFixed(3)} د.ب` : '—'}
+                        {pay !== null && pay > 0 ? `${pay.toFixed(3)} د.ب` : '—'}
                       </td>
                       <td className="p-3 text-center">
                         {!checkOut ? (
@@ -323,7 +491,7 @@ export default function WorkHoursReportPage() {
                       <td className="p-3 text-xs text-gray-500 no-print">
                         {isEditing ? (
                           <input type="text" placeholder="سبب التعديل*" value={editReason} onChange={e => setEditReason(e.target.value)} className="bg-brand-black border border-red-500/50 rounded-lg px-2 py-1 text-xs text-white w-full focus:outline-none" />
-                        ) : (att.reason || (att.editedBy ? `✏️ ${att.editedBy.name}` : '—'))}
+                        ) : (att.reason || '—')}
                       </td>
                       <td className="p-3 text-center no-print">
                         <div className="flex items-center justify-center gap-2">
@@ -349,6 +517,7 @@ export default function WorkHoursReportPage() {
                   <tr>
                     <td colSpan={4} className="p-3 font-black text-white">الإجمالي</td>
                     <td className="p-3 font-black text-brand-gold">{totalHours.toFixed(2)} س</td>
+                    <td className="p-3 text-xs text-gray-400">{hourlyRate > 0 ? `${hourlyRate.toFixed(3)} د.ب/س` : '—'}</td>
                     <td className="p-3 font-black text-brand-orange">{estimatedSalary > 0 ? `${estimatedSalary.toFixed(3)} د.ب` : '—'}</td>
                     <td colSpan={3}></td>
                   </tr>

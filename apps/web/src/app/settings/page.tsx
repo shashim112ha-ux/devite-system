@@ -396,39 +396,102 @@ function BackupTab() {
 // ----------------------------------------------------
 // Logs Tab
 // ----------------------------------------------------
-function LogsTab({ data }: any) {
+function LogsTab({ data, filter, setFilter, isLoading }: any) {
+   const [search, setSearch] = useState('');
+   const [startDate, setStartDate] = useState('');
+   const [endDate, setEndDate] = useState('');
+
+   const actionColors: Record<string, string> = {
+      'UPDATE_ORDER': 'text-blue-400',
+      'CREATE_EXPENSE': 'text-orange-400',
+      'DELETE_ORDER': 'text-red-500',
+      'ADD_STAFF': 'text-green-400',
+      'CALCULATE_PAYROLL': 'text-purple-400',
+      'UPDATE_STAFF': 'text-yellow-400',
+      'REQUEST_SHIFT': 'text-cyan-400',
+      'EDIT_ATTENDANCE': 'text-teal-400',
+   };
+
+   const filtered = (data || []).filter((log: any) => {
+      if (!search) return true;
+      const s = search.toLowerCase();
+      return (log.details || '').toLowerCase().includes(s)
+         || (log.action || '').toLowerCase().includes(s)
+         || (log.user?.name || '').toLowerCase().includes(s);
+   });
+
    return (
       <div className="bg-brand-navy border border-white/5 rounded-[30px] overflow-hidden">
-         <div className="p-8 border-b border-white/5">
-            <h2 className="text-2xl font-black">سجل النظام العام (Audit Logs)</h2>
-            <p className="text-sm text-gray-400 mt-1">تتبع كافة الإجراءات الحساسة في النظام</p>
-         </div>
-         <table className="w-full text-right">
-            <thead className="bg-white/5 text-gray-500 text-xs uppercase tracking-widest">
-               <tr>
-                  <th className="p-4 pl-0">التاريخ</th>
-                  <th className="p-4">الموظف</th>
-                  <th className="p-4">العملية</th>
-                  <th className="p-4">التفاصيل</th>
-               </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5 text-sm">
-               {data?.map((log: any) => (
-                  <tr key={log.id} className="hover:bg-white/[0.02]">
-                     <td className="p-4 pl-0 text-gray-400">{new Date(log.createdAt).toLocaleString('ar-SA')}</td>
-                     <td className="p-4 font-bold text-white">
-                        {log.user?.name} 
-                        <span className="block text-[10px] text-brand-orange uppercase font-normal">{log.user?.role}</span>
-                     </td>
-                     <td className="p-4 text-brand-gold font-bold">{log.action}</td>
-                     <td className="p-4 text-gray-300">{log.details}</td>
-                  </tr>
+         <div className="p-6 border-b border-white/5">
+            <h2 className="text-2xl font-black mb-2">سجل النظام العام (Audit Logs)</h2>
+            <p className="text-sm text-gray-400 mb-5">تتبع كافة الإجراءات الحساسة في النظام</p>
+            
+            {/* Filters */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+               {['today', 'weekly', 'monthly', 'custom', 'all'].map(f => (
+                  <button key={f} onClick={() => setFilter(f)} className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${filter === f ? 'bg-brand-gold text-black' : 'bg-brand-black border border-white/10 text-gray-400 hover:text-white'}`}>
+                     {f === 'today' ? 'اليوم' : f === 'weekly' ? 'الأسبوع' : f === 'monthly' ? 'الشهر' : f === 'custom' ? 'مخصص' : 'الكل'}
+                  </button>
                ))}
-               {data?.length === 0 && (
-                  <tr><td colSpan={4} className="p-8 text-center text-gray-500">لا توجد سجلات بعد</td></tr>
-               )}
-            </tbody>
-         </table>
+            </div>
+            
+            {filter === 'custom' && (
+               <div className="flex gap-3 mt-3">
+                  <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-brand-black border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-gold" />
+                  <span className="text-gray-500 self-center">إلى</span>
+                  <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-brand-black border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-gold" />
+               </div>
+            )}
+            
+            <div className="mt-3">
+               <input 
+                  type="text"
+                  placeholder="🔍 بحث في السجلات (الموظف، العملية، التفاصيل)..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="w-full bg-brand-black border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-gold"
+               />
+            </div>
+         </div>
+         
+         <div className="p-3 border-b border-white/5 flex justify-between items-center bg-brand-black/20">
+            <span className="text-xs text-gray-500">{filtered.length} سجل</span>
+            {isLoading && <span className="text-xs text-brand-gold animate-pulse">جاري التحميل...</span>}
+         </div>
+         
+         <div className="overflow-y-auto max-h-[600px]">
+            <table className="w-full text-right">
+               <thead className="bg-white/5 text-gray-500 text-xs uppercase tracking-widest sticky top-0">
+                  <tr>
+                     <th className="p-4">التاريخ والوقت</th>
+                     <th className="p-4">الموظف</th>
+                     <th className="p-4">العملية</th>
+                     <th className="p-4">التفاصيل</th>
+                  </tr>
+               </thead>
+               <tbody className="divide-y divide-white/5 text-sm">
+                  {filtered.map((log: any) => (
+                     <tr key={log.id} className="hover:bg-white/[0.02] transition-colors">
+                        <td className="p-4 text-gray-400 whitespace-nowrap">
+                           <div className="font-mono text-xs">{new Date(log.createdAt).toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric' })}</div>
+                           <div className="text-gray-600 text-[10px]">{new Date(log.createdAt).toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</div>
+                        </td>
+                        <td className="p-4 font-bold text-white">
+                           {log.user?.name}
+                           <span className="block text-[10px] text-brand-orange uppercase font-normal">{log.user?.role}</span>
+                        </td>
+                        <td className="p-4">
+                           <span className={`font-bold text-xs px-2 py-1 rounded-lg bg-white/5 ${actionColors[log.action] || 'text-brand-gold'}`}>{log.action}</span>
+                        </td>
+                        <td className="p-4 text-gray-300 text-xs max-w-[300px]">{log.details}</td>
+                     </tr>
+                  ))}
+                  {filtered.length === 0 && (
+                     <tr><td colSpan={4} className="p-10 text-center text-gray-500">لا توجد سجلات تطابق البحث</td></tr>
+                  )}
+               </tbody>
+            </table>
+         </div>
       </div>
    );
 }
