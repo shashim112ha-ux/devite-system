@@ -289,6 +289,17 @@ export const appRouter = router({
       return product;
     }),
 
+  toggleProductVisibility: managerProcedure
+    .input(z.object({ id: z.string(), isHidden: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      const product = await ctx.prisma.product.update({
+        where: { id: input.id },
+        data: { isHidden: input.isHidden }
+      });
+      await logAudit(ctx.prisma, ctx.user.id, 'TOGGLE_PRODUCT_VISIBILITY', `تعديل ظهور الصنف: ${product.name} إلى ${product.isHidden ? 'مخفي' : 'ظاهر'}`);
+      return product;
+    }),
+
   addCategory: managerProcedure
     .input(z.object({ name: z.string() }))
     .mutation(async ({ input, ctx }) => {

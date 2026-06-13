@@ -82,6 +82,7 @@ model Product {
   image            String?
   available        Boolean  @default(true)
   unavailableReason String?
+  isHidden         Boolean  @default(false)
   categoryId       String
   category         Category @relation(fields: [categoryId], references: [id])
 

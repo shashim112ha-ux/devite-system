@@ -212,7 +212,7 @@ export default function POSPage() {
   const filteredProducts = productsQuery.data?.filter(p => {
     const matchesCategory = selectedCategory === "ALL" || p.categoryId === selectedCategory;
     const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesCategory && matchesSearch;
+    return matchesCategory && matchesSearch && !p.isHidden;
   });
 
   return (<div className="flex flex-col-reverse lg:flex-row h-screen bg-brand-black text-white font-sans overflow-hidden">

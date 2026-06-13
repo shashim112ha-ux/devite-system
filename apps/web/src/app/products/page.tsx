@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { trpc } from "../utils/trpc";
-import { Plus, Edit2, Trash2, CheckCircle2, XCircle, PlusCircle, Tag, Package, X } from "lucide-react";
+import { Plus, Edit2, Trash2, CheckCircle2, XCircle, PlusCircle, Tag, Package, X, Eye, EyeOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const EMOJIS = ["☕","🍵","🧃","🥤","🍹","🍰","🥐","🍞","🥗","🍱","🥘","🍜","🍔","🍕","🍗","🌮"];
@@ -24,6 +24,7 @@ export default function ProductsPage() {
   const updateProductMutation = trpc.updateProduct.useMutation();
   const deleteProductMutation = trpc.deleteProduct.useMutation();
   const toggleAvailMutation = trpc.toggleProductAvailability.useMutation();
+  const toggleVisMutation = trpc.toggleProductVisibility.useMutation();
   const addCategoryMutation = trpc.addCategory.useMutation();
   const updateCategoryMutation = trpc.updateCategory.useMutation();
   const deleteCategoryMutation = trpc.deleteCategory.useMutation();
@@ -103,7 +104,25 @@ export default function ProductsPage() {
                     className="p-2 bg-red-500/20 backdrop-blur rounded-xl text-red-500 border border-red-500/20">
                     <Trash2 size={14} />
                   </button>
+                  <button onClick={async () => {
+                    await toggleVisMutation.mutateAsync({ id: product.id, isHidden: !product.isHidden });
+                    productsQuery.refetch();
+                  }}
+                    className={`p-2 backdrop-blur rounded-xl border ${product.isHidden ? "bg-gray-500/20 text-gray-400 border-gray-500/20" : "bg-blue-500/20 text-blue-400 border-blue-500/20"}`}
+                    title={product.isHidden ? "إظهار في المنيو" : "إخفاء من المنيو"}
+                  >
+                    {product.isHidden ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
                 </div>
+
+                {/* Hidden Badge */}
+                {product.isHidden && (
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none">
+                    <span className="bg-black/80 text-white font-bold px-4 py-2 rounded-xl backdrop-blur-md border border-white/10 flex items-center gap-2">
+                      <EyeOff size={16} className="text-gray-400" /> مخفي من المنيو
+                    </span>
+                  </div>
+                )}
 
                 {/* Availability toggle */}
                 <div className="absolute top-3 right-3 z-10 flex flex-col items-end gap-1">
@@ -126,11 +145,11 @@ export default function ProductsPage() {
                 </div>
 
                 {product.image ? (
-                  <div className="aspect-video bg-brand-navy flex items-center justify-center overflow-hidden">
+                  <div className={`aspect-video bg-brand-navy flex items-center justify-center overflow-hidden ${product.isHidden ? 'opacity-30 grayscale' : ''}`}>
                     <img src={product.image} alt={product.name} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
                   </div>
                 ) : (
-                  <div className="aspect-video bg-brand-navy flex items-center justify-center text-5xl">
+                  <div className={`aspect-video bg-brand-navy flex items-center justify-center text-5xl ${product.isHidden ? 'opacity-30 grayscale' : ''}`}>
                     {EMOJIS[product.name.length % EMOJIS.length]}
                   </div>
                 )}
