@@ -9,6 +9,7 @@ export default function AttendancePage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [showClockOutModal, setShowClockOutModal] = useState<string | null>(null); // Stores the userId for clock out
+  const [page, setPage] = useState(1);
   
   const settingsQuery = trpc.getSystemSettings.useQuery();
 
@@ -16,7 +17,9 @@ export default function AttendancePage() {
     setUserRole(localStorage.getItem("userRole"));
   }, []);
   const staffQuery = trpc.getStaff.useQuery();
-  const historyQuery = trpc.getAttendanceHistory.useQuery({});
+  const historyResponse = trpc.getAttendanceHistory.useQuery({ page, limit: 20 });
+  const historyList = historyResponse.data?.data || [];
+  const totalPages = historyResponse.data?.totalPages || 1;
   
   const clockInMutation = trpc.clockIn.useMutation();
   const clockOutMutation = trpc.clockOut.useMutation();
@@ -32,7 +35,7 @@ export default function AttendancePage() {
     } else {
       await clockInMutation.mutateAsync({ userId });
       staffQuery.refetch();
-      historyQuery.refetch();
+      historyResponse.refetch();
     }
   };
 
@@ -43,7 +46,7 @@ export default function AttendancePage() {
        await clockOutMutation.mutateAsync({ attendanceId: member.attendance[0].id });
        setShowClockOutModal(null);
        staffQuery.refetch();
-       historyQuery.refetch();
+       historyResponse.refetch();
     }
   };
 
@@ -126,7 +129,7 @@ export default function AttendancePage() {
                 </tr>
               </thead>
               <tbody>
-                {historyQuery.data?.map((entry) => (
+                {historyList.map((entry: any) => (
                   <tr key={entry.id} className="border-b border-white/5 last:border-0">
                     <td className="py-5">
                       <div className="flex items-center gap-3">
@@ -142,10 +145,10 @@ export default function AttendancePage() {
                        {entry.checkOut ? ((new Date(entry.checkOut).getTime() - new Date(entry.checkIn).getTime()) / 3600000).toFixed(1) + ' ساعة' : 'نشط حالياً'}
                     </td>
                     <td className="py-5 text-center">
-                       <button 
+                        <button 
                         onClick={async () => {
                           await deleteMutation.mutateAsync({ id: entry.id });
-                          historyQuery.refetch();
+                          historyResponse.refetch();
                         }}
                         className="text-red-500 hover:bg-red-500/10 p-2 rounded-lg"
                        >
@@ -156,6 +159,13 @@ export default function AttendancePage() {
                 ))}
               </tbody>
             </table>
+            {totalPages > 1 && (
+              <div className="flex justify-between items-center p-4 border-t border-white/5 bg-brand-navy-light/10">
+                <button disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))} className="px-4 py-2 bg-white/5 rounded-xl disabled:opacity-50 text-white text-xs">السابق</button>
+                <span className="text-sm text-gray-400">صفحة {page} من {totalPages}</span>
+                <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="px-4 py-2 bg-white/5 rounded-xl disabled:opacity-50 text-white text-xs">التالي</button>
+              </div>
+            )}
           </section>
         </div>
       )}

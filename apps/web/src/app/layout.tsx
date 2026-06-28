@@ -25,6 +25,7 @@ import {
   UserCheck,
   Menu,
   Clock,
+  CheckSquare,
   X
 } from "lucide-react";
 import Link from "next/link";
@@ -181,6 +182,7 @@ function RoleGuard({ children, pathname }: { children: React.ReactNode, pathname
             {/* الحضور والانصراف وتقارير الشفت - متاحة لجميع الموظفين والموظف المستثمر */}
             {(role === 'ADMIN' || role === 'MANAGER' || role === 'CASHIER' || role === 'KITCHEN' || role === 'STAFF' || role === 'INVESTOR_STAFF') && (
               <>
+                <SidebarLink href="/tasks" icon={<CheckSquare size={18} />} label="مهامي اليومية" active={pathname === '/tasks'} />
                 <SidebarLink href="/attendance" icon={<UserCheck size={18} />} label="حضور وانصراف" active={pathname === '/attendance'} />
                 <SidebarLink href="/shift-report" icon={<ClipboardCheck size={18} />} label="تقرير نهاية الدوام" active={pathname === '/shift-report'} />
                 <SidebarLink href="/schedule" icon={<Calendar size={18} />} label="جدول المناوبات" active={pathname === '/schedule'} />

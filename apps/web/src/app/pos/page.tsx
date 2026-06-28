@@ -21,6 +21,7 @@ export default function POSPage() {
   const [sugar, setSugar] = useState<string>("50%");
   const [ice, setIce] = useState<string>("عادي");
   const [notes, setNotes] = useState<string>("");
+  const [needsOverride, setNeedsOverride] = useState<boolean>(false);
 
   // Customer Loyalty State
   const [customerPhone, setCustomerPhone] = useState<string>("");
@@ -93,10 +94,19 @@ export default function POSPage() {
       return;
     }
 
+    let isOverride = false;
     if (!product.dynamicAvailable) {
-      alert("عذراً، هذا المنتج غير متوفر حالياً بسبب نقص المكونات في المخزن.");
-      return;
+      const userRole = localStorage.getItem('userRole');
+      if (userRole === 'ADMIN' || userRole === 'MANAGER') {
+        const confirmOverride = confirm("عذراً، هذا المنتج غير متوفر حالياً. هل توافق على بيعه كمسؤول وتسجيل عجز (تجاوز مخزون)؟");
+        if (!confirmOverride) return;
+        isOverride = true;
+      } else {
+        alert("عذراً، هذا المنتج غير متوفر حالياً بسبب نقص المكونات في المخزن.");
+        return;
+      }
     }
+    setNeedsOverride(isOverride);
     setSelectedProduct(product);
     setSize(product.sizes?.length > 0 ? product.sizes[0] : "-");
     setSugar(product.sugarLevels?.length > 0 ? product.sugarLevels[0] : "-");
@@ -139,10 +149,12 @@ export default function POSPage() {
         sugar,
         ice,
         notes,
-        quantity: 1
+        quantity: 1,
+        needsOverride
       }]);
     }
     setSelectedProduct(null);
+    setNeedsOverride(false);
   };
 
   const updateQuantity = (cartItemId: string, amount: number) => {
@@ -185,6 +197,7 @@ export default function POSPage() {
         })),
         paymentMethod,
         total: total,
+        overrideInventory: cart.some(i => i.needsOverride) || undefined
       });
 
       setLastOrder(order);

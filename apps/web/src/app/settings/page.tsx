@@ -4,18 +4,20 @@ import { useState } from "react";
 import { trpc } from "../utils/trpc";
 import { 
   Settings2, Building2, Wallet, Database, ShieldAlert,
-  Save, Plus, MapPin, Building, CreditCard, RefreshCw, MessageCircle
+  Save, Plus, MapPin, Building, CreditCard, RefreshCw, MessageCircle, CheckSquare
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { DailyTasksSettings } from "./DailyTasksSettings";
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<"general" | "branches" | "accounts" | "whatsapp" | "backup" | "logs">("general");
+  const [activeTab, setActiveTab] = useState<"general" | "branches" | "accounts" | "whatsapp" | "backup" | "logs" | "tasks">("general");
   const [auditFilter, setAuditFilter] = useState('today');
+  const [auditPage, setAuditPage] = useState(1);
 
   const settingsQuery = trpc.getSystemSettings.useQuery();
   const branchesQuery = trpc.getBranchLocations.useQuery();
   const accountsQuery = trpc.getAccounts.useQuery();
-  const logsQuery = trpc.getAuditLogs.useQuery({ filterType: auditFilter }, { enabled: activeTab === 'logs' });
+  const logsQuery = trpc.getAuditLogs.useQuery({ filterType: auditFilter, page: auditPage, limit: 20 }, { enabled: activeTab === 'logs' });
 
   return (
     <div className="min-h-screen bg-brand-black p-10">
@@ -36,6 +38,7 @@ export default function SettingsPage() {
                <TabButton active={activeTab === 'branches'} onClick={() => setActiveTab('branches')} icon={<Building2 size={20}/>} label="إدارة الفروع" />
                <TabButton active={activeTab === 'accounts'} onClick={() => setActiveTab('accounts')} icon={<Wallet size={20}/>} label="الحسابات والصناديق" />
                <TabButton active={activeTab === 'whatsapp'} onClick={() => setActiveTab('whatsapp')} icon={<MessageCircle size={20}/>} label="مركز الواتساب" />
+               <TabButton active={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} icon={<CheckSquare size={20}/>} label="المهام اليومية" />
                <TabButton active={activeTab === 'backup'} onClick={() => setActiveTab('backup')} icon={<Database size={20}/>} label="النسخ الاحتياطي" />
                <TabButton active={activeTab === 'logs'} onClick={() => setActiveTab('logs')} icon={<ShieldAlert size={20}/>} label="سجل النظام العام" />
             </div>
@@ -47,8 +50,9 @@ export default function SettingsPage() {
             {activeTab === 'branches' && <BranchesTab data={branchesQuery.data} refetch={branchesQuery.refetch} />}
             {activeTab === 'accounts' && <AccountsTab data={accountsQuery.data} refetch={accountsQuery.refetch} />}
             {activeTab === 'whatsapp' && <WhatsAppTab data={settingsQuery.data} refetch={settingsQuery.refetch} />}
+            {activeTab === 'tasks' && <DailyTasksSettings />}
             {activeTab === 'backup' && <BackupTab />}
-            {activeTab === 'logs' && <LogsTab data={logsQuery.data} filter={auditFilter} setFilter={setAuditFilter} isLoading={logsQuery.isLoading} />}
+            {activeTab === 'logs' && <LogsTab data={logsQuery.data} filter={auditFilter} setFilter={(f: string) => { setAuditFilter(f); setAuditPage(1); }} isLoading={logsQuery.isLoading} page={auditPage} setPage={setAuditPage} />}
          </div>
       </div>
     </div>
@@ -318,8 +322,11 @@ function AccountsTab({ data, refetch }: any) {
 // Backup Tab
 // ----------------------------------------------------
 function BackupTab() {
+   const [page, setPage] = useState(1);
    const backupMutation = trpc.triggerDatabaseBackup.useMutation();
-   const logsQuery = trpc.getBackupLogs.useQuery();
+   const logsQuery = trpc.getBackupLogs.useQuery({ page, limit: 10 });
+   const logsList = logsQuery.data?.data || [];
+   const totalPages = logsQuery.data?.totalPages || 1;
 
    const handleBackup = async () => {
       try {
@@ -364,7 +371,7 @@ function BackupTab() {
                      </tr>
                   </thead>
                   <tbody className="text-sm">
-                     {logsQuery.data?.map((log: any) => (
+                     {logsList.map((log: any) => (
                         <tr key={log.id} className="border-t border-white/5">
                            <td className="py-4 text-gray-300" dir="ltr">{log.fileName}</td>
                            <td className="py-4">{new Date(log.createdAt).toLocaleString('en-US', { hour12: true })}</td>
@@ -382,11 +389,18 @@ function BackupTab() {
                            </td>
                         </tr>
                      ))}
-                     {(!logsQuery.data || logsQuery.data.length === 0) && (
+                     {logsList.length === 0 && (
                         <tr><td colSpan={4} className="py-8 text-center text-gray-500">لا توجد نسخ احتياطية مسجلة بعد.</td></tr>
                      )}
                   </tbody>
                </table>
+            )}
+            {totalPages > 1 && (
+               <div className="flex justify-between items-center mt-4 p-4 border-t border-white/5 bg-brand-navy-light/10">
+                  <button disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))} className="px-4 py-2 bg-white/5 rounded-xl disabled:opacity-50 text-white text-xs">السابق</button>
+                  <span className="text-sm text-gray-400">صفحة {page} من {totalPages}</span>
+                  <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="px-4 py-2 bg-white/5 rounded-xl disabled:opacity-50 text-white text-xs">التالي</button>
+               </div>
             )}
          </div>
       </div>
@@ -396,10 +410,13 @@ function BackupTab() {
 // ----------------------------------------------------
 // Logs Tab
 // ----------------------------------------------------
-function LogsTab({ data, filter, setFilter, isLoading }: any) {
+function LogsTab({ data, filter, setFilter, isLoading, page, setPage }: any) {
    const [search, setSearch] = useState('');
    const [startDate, setStartDate] = useState('');
    const [endDate, setEndDate] = useState('');
+
+   const auditLogs = data?.data || [];
+   const totalPages = data?.totalPages || 1;
 
    const actionColors: Record<string, string> = {
       'UPDATE_ORDER': 'text-blue-400',
@@ -412,7 +429,7 @@ function LogsTab({ data, filter, setFilter, isLoading }: any) {
       'EDIT_ATTENDANCE': 'text-teal-400',
    };
 
-   const filtered = (data || []).filter((log: any) => {
+   const filtered = auditLogs.filter((log: any) => {
       if (!search) return true;
       const s = search.toLowerCase();
       return (log.details || '').toLowerCase().includes(s)
@@ -492,6 +509,14 @@ function LogsTab({ data, filter, setFilter, isLoading }: any) {
                </tbody>
             </table>
          </div>
+
+         {totalPages > 1 && (
+            <div className="flex justify-between items-center p-4 border-t border-white/5 bg-brand-navy-light/10">
+               <button disabled={page === 1} onClick={() => setPage((p: number) => Math.max(1, p - 1))} className="px-4 py-2 bg-white/5 rounded-xl disabled:opacity-50 text-white text-xs">السابق</button>
+               <span className="text-sm text-gray-400">صفحة {page} من {totalPages}</span>
+               <button disabled={page >= totalPages} onClick={() => setPage((p: number) => p + 1)} className="px-4 py-2 bg-white/5 rounded-xl disabled:opacity-50 text-white text-xs">التالي</button>
+            </div>
+         )}
       </div>
    );
 }

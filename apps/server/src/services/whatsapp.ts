@@ -313,28 +313,57 @@ export async function sendWhatsAppMessage(
 // =========================================
 // Queue System
 // =========================================
-export async function queueWhatsAppMessage(
-  prisma: any,
-  recipient: string,
-  messageType: string,
-  body: string,
-  userId?: string,
-  pdfBufferBase64?: string,
-  pdfName?: string
-): Promise<void> {
+export async function queueWhatsAppMessage({
+  prisma,
+  recipient,
+  messageType,
+  body,
+  templateKey,
+  payload,
+  relatedEntityType,
+  relatedEntityId,
+  userId
+}: {
+  prisma: any;
+  recipient: string;
+  messageType: string;
+  body?: string;
+  templateKey?: string;
+  payload?: any;
+  relatedEntityType?: string;
+  relatedEntityId?: string;
+  userId?: string;
+}): Promise<void> {
   try {
     if (!recipient || recipient.trim() === '') return;
+
+    // Deduplication mechanism
+    if (relatedEntityType && relatedEntityId && messageType) {
+      const existing = await prisma.whatsAppLog.findFirst({
+        where: {
+          relatedEntityType,
+          relatedEntityId,
+          messageType,
+          status: { in: ['PENDING', 'SENT'] }
+        }
+      });
+      if (existing) {
+        console.log(`[WhatsApp Queue] Message for ${relatedEntityType} ${relatedEntityId} already exists. Skipping.`);
+        return;
+      }
+    }
+
     await prisma.whatsAppLog.create({
       data: {
         recipient: recipient.trim(),
         messageType,
-        body,
+        body: body || '',
+        templateKey,
+        payload: payload ? JSON.stringify(payload) : null,
+        relatedEntityType,
+        relatedEntityId,
         status: 'PENDING',
         userId: userId || null,
-        // Optional: save base64 string to a field if your schema supports it,
-        // or just rely on direct sending for PDFs and not queuing them if schema doesn't have it.
-        // For simplicity we will skip storing PDF in DB for the queue, 
-        // in production we might want an S3 link or a dedicated field.
       }
     });
   } catch (e) {
@@ -342,24 +371,60 @@ export async function queueWhatsAppMessage(
   }
 }
 
+export let lastWorkerRunTime: Date | null = null;
+export let isProcessingQueue = false;
+
 export async function processWhatsAppQueue(prisma: any): Promise<void> {
+  if (isProcessingQueue) return;
+  
   try {
+    isProcessingQueue = true;
+    lastWorkerRunTime = new Date();
+
     const settings = await prisma.whatsAppSettings.findUnique({ where: { id: 'default' } });
-    if (!settings?.isEnabled) return;
+    if (!settings?.isEnabled) {
+      isProcessingQueue = false;
+      return;
+    }
     
-    if (whatsappStatus !== 'CONNECTED') return; // Don't process if disconnected
+    if (whatsappStatus !== 'CONNECTED') {
+      isProcessingQueue = false;
+      return; 
+    }
 
     const pending = await prisma.whatsAppLog.findMany({
       where: { status: 'PENDING', attempts: { lt: 3 } },
-      take: 10
+      orderBy: { createdAt: 'asc' },
+      take: 5
     });
 
     for (const log of pending) {
-      const result = await sendWhatsAppMessage(log.recipient, log.body);
+      let finalBody = log.body;
+      let pdfBuffer: Buffer | undefined = undefined;
+      let pdfName: string | undefined = undefined;
+      
+      try {
+        if (log.payload) {
+          const parsedPayload = JSON.parse(log.payload);
+          if (log.templateKey && DEFAULT_TEMPLATES[log.templateKey]) {
+            finalBody = fillTemplate(DEFAULT_TEMPLATES[log.templateKey].body, parsedPayload);
+          }
+          
+          if (log.messageType === 'SHIFT_REPORT' && parsedPayload.report) {
+            pdfBuffer = await generateShiftReportPDF(parsedPayload.report);
+            pdfName = `Shift_Report_${parsedPayload.report.id || Date.now()}.pdf`;
+          }
+        }
+      } catch (parseError) {
+        console.error('[WhatsApp Queue] Payload parse error:', parseError);
+        // Continue but it will fail if body is empty
+      }
+
+      const result = await sendWhatsAppMessage(log.recipient, finalBody || 'DEVITE System', pdfBuffer, pdfName);
       if (result.success) {
         await prisma.whatsAppLog.update({
           where: { id: log.id },
-          data: { status: 'SENT', sentAt: new Date(), attempts: log.attempts + 1 }
+          data: { status: 'SENT', sentAt: new Date(), attempts: log.attempts + 1, lastAttemptAt: new Date(), errorMessage: null }
         });
       } else {
         const newAttempts = log.attempts + 1;
@@ -367,13 +432,16 @@ export async function processWhatsAppQueue(prisma: any): Promise<void> {
           where: { id: log.id },
           data: {
             attempts: newAttempts,
-            status: newAttempts >= 3 ? 'FAILED' : 'PENDING',
-            errorMessage: result.error
+            status: newAttempts >= log.maxAttempts ? 'FAILED' : 'PENDING',
+            errorMessage: result.error,
+            lastAttemptAt: new Date()
           }
         });
       }
     }
   } catch (e) {
     console.error('[WhatsApp Queue] Processing error:', e);
+  } finally {
+    isProcessingQueue = false;
   }
 }

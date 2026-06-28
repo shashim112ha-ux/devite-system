@@ -8,6 +8,9 @@ import { appRouter } from './router';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import { PrismaClient } from '@prisma/client';
+import { processWhatsAppQueue } from './services/whatsapp';
+import cron from 'node-cron';
 
 dotenv.config();
 
@@ -94,6 +97,44 @@ const PORT = process.env.PORT || 4000;
 server.listen(Number(PORT), "0.0.0.0", () => {
   console.log(`🚀 DEVITE Server running on http://0.0.0.0:${PORT}/trpc`);
   console.log(`🔌 Socket.io ready on ws://127.0.0.1:${PORT}`);
+});
+
+// WhatsApp Queue Worker (Background Engine)
+const prisma = new PrismaClient();
+
+setInterval(async () => {
+  await processWhatsAppQueue(prisma);
+}, 30000); // Run every 30 seconds
+
+// Midnight Checkout CRON (Runs at 00:00 every day)
+cron.schedule('0 0 * * *', async () => {
+  console.log('⏰ Running Midnight Checkout CRON job...');
+  try {
+    const openAttendances = await prisma.attendance.findMany({
+      where: { checkOut: null }
+    });
+
+    for (const att of openAttendances) {
+      await prisma.attendance.update({
+        where: { id: att.id },
+        data: { 
+          checkOut: new Date(), 
+          autoCheckout: true,
+          checkoutSource: 'AUTO_MIDNIGHT'
+        }
+      });
+      await prisma.notification.create({
+        data: {
+          type: 'WARNING',
+          message: `تنبيه: تم تسجيل انصراف تلقائي للموظف (تسجيل رقم: ${att.id}) بسبب إغلاق اليوم. يرجى المراجعة.`
+        }
+      });
+      io.emit('attendance_event', { type: 'CHECK_OUT', userId: att.userId });
+    }
+    console.log(`✅ Midnight Checkout completed. Checked out ${openAttendances.length} users.`);
+  } catch (err) {
+    console.error('❌ Midnight Checkout Error:', err);
+  }
 });
 
 export { io };

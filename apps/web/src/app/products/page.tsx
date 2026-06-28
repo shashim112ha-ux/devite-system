@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { trpc } from "../utils/trpc";
-import { Plus, Edit2, Trash2, CheckCircle2, XCircle, PlusCircle, Tag, Package, X, Eye, EyeOff } from "lucide-react";
+import { Plus, Edit2, Trash2, CheckCircle2, XCircle, PlusCircle, Tag, Package, X, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const EMOJIS = ["☕","🍵","🧃","🥤","🍹","🍰","🥐","🍞","🥗","🍱","🥘","🍜","🍔","🍕","🍗","🌮"];
@@ -156,10 +156,20 @@ export default function ProductsPage() {
 
                 <div className="p-5">
                   <div className="flex justify-between items-start mb-1">
-                    <h3 className="font-bold text-lg leading-tight">{product.name}</h3>
+                    <h3 className="font-bold text-lg leading-tight flex items-center gap-2">
+                       {product.name}
+                       {(product as any).isLossMaking && (
+                         <span className="bg-red-500/20 text-red-500 text-[10px] px-2 py-0.5 rounded flex items-center gap-1" title="تكلفة الإنتاج أعلى من سعر البيع">
+                           <AlertCircle size={12} /> خسارة
+                         </span>
+                       )}
+                    </h3>
                     <span className="text-brand-orange font-black text-lg">{product.price} د.ب</span>
                   </div>
-                  <p className="text-brand-gold text-[10px] font-bold uppercase tracking-widest mb-3">{product.category.name}</p>
+                  <div className="flex justify-between items-center mb-3">
+                     <p className="text-brand-gold text-[10px] font-bold uppercase tracking-widest">{product.category.name}</p>
+                     <p className="text-[10px] text-gray-500 bg-white/5 px-2 py-1 rounded">متوفر: {(product as any).dynamicAvailable ?? '∞'}</p>
+                  </div>
                   {product.description && <p className="text-gray-500 text-xs mb-3">{product.description}</p>}
                   <div className="flex flex-col gap-2 text-[10px] text-gray-500 border-t border-white/5 pt-3">
                     <div className="flex justify-between">

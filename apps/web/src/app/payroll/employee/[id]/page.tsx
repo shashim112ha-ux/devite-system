@@ -41,7 +41,8 @@ export default function EmployeePayrollReport() {
   }
 
   // Calculate stats from attendance
-  const totalHours = attendance?.reduce((sum, att) => {
+  const attendanceList = attendance?.data || [];
+  const totalHours = attendanceList.reduce((sum, att) => {
     if (att.checkOut) {
       const diff = (new Date(att.checkOut).getTime() - new Date(att.checkIn).getTime()) / (1000 * 60 * 60);
       return sum + diff;
@@ -49,7 +50,7 @@ export default function EmployeePayrollReport() {
     return sum;
   }, 0) || 0;
 
-  const daysWorked = new Set(attendance?.map(att => new Date(att.checkIn).toDateString())).size;
+  const daysWorked = new Set(attendanceList.map(att => new Date(att.checkIn).toDateString())).size;
   const avgHoursPerDay = daysWorked > 0 ? totalHours / daysWorked : 0;
 
   return (
@@ -139,12 +140,12 @@ export default function EmployeePayrollReport() {
           </div>
           <div className="bg-brand-navy-light/50 border border-white/5 rounded-2xl p-4 text-center">
             <p className="text-xs text-gray-400 mb-1">كشوفات الراتب</p>
-            <p className="text-2xl font-black text-brand-orange">{payrolls?.length || 0}</p>
+            <p className="text-2xl font-black text-brand-orange">{payrolls?.data?.length || 0}</p>
           </div>
         </div>
 
         {/* Payroll Summary */}
-        {payrolls && payrolls.length > 0 && (
+        {payrolls?.data && payrolls.data.length > 0 && (
           <div className="bg-brand-navy border border-white/5 rounded-[30px] overflow-hidden shadow-xl">
             <div className="p-5 border-b border-white/5 bg-brand-navy-light/30">
               <h3 className="font-black text-lg flex items-center gap-2">
@@ -168,7 +169,7 @@ export default function EmployeePayrollReport() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {payrolls.map((p: any) => (
+                  {(payrolls?.data || []).map((p: any) => (
                     <tr key={p.id} className="hover:bg-white/[0.02] transition-colors">
                       <td className="p-3">
                         <div className="text-white text-xs font-bold">{new Date(p.startDate).toLocaleDateString('ar-SA')}</div>
@@ -200,7 +201,7 @@ export default function EmployeePayrollReport() {
                   <tr>
                     <td className="p-3 font-black text-white" colSpan={8}>الإجمالي المدفوع</td>
                     <td className="p-3 font-black text-brand-gold text-lg">
-                      {payrolls.filter((p: any) => p.status === 'PAID').reduce((s: number, p: any) => s + p.netSalary, 0).toFixed(3)} د.ب
+                      {(payrolls?.data || []).filter((p: any) => p.status === 'PAID').reduce((s: number, p: any) => s + p.netSalary, 0).toFixed(3)} د.ب
                     </td>
                     <td></td>
                   </tr>
@@ -216,7 +217,7 @@ export default function EmployeePayrollReport() {
             <h3 className="font-black text-lg flex items-center gap-2">
               <Calendar className="text-brand-orange" size={20} /> سجل الحضور والانصراف التفصيلي
             </h3>
-            <span className="text-xs text-gray-400">{attendance?.length || 0} سجل</span>
+            <span className="text-xs text-gray-400">{attendanceList.length || 0} سجل</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-right text-sm">
@@ -231,9 +232,9 @@ export default function EmployeePayrollReport() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {!attendance || attendance.length === 0 ? (
+                {attendanceList.length === 0 ? (
                   <tr><td colSpan={6} className="p-10 text-center text-gray-500">لا يوجد سجلات حضور</td></tr>
-                ) : attendance.map((att: any) => {
+                ) : attendanceList.map((att: any) => {
                   const checkIn = new Date(att.checkIn);
                   const checkOut = att.checkOut ? new Date(att.checkOut) : null;
                   const hours = checkOut ? ((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60)) : null;

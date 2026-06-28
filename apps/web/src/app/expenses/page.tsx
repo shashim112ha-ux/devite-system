@@ -18,6 +18,7 @@ export default function ExpensesPage() {
   const [filterType, setFilterType] = useState('monthly');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [page, setPage] = useState(1);
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [category, setCategory] = useState(CATEGORIES[0]);
@@ -49,9 +50,11 @@ export default function ExpensesPage() {
 
   const utils = trpc.useContext();
   
-  const queryParams = { filterType, ...(filterType === 'custom' ? { startDate, endDate } : {}) };
+  const queryParams = { filterType, page, limit: 20, ...(filterType === 'custom' ? { startDate, endDate } : {}) };
   
-  const { data: expensesList, isLoading: loadingExpenses } = trpc.getDetailedExpenses.useQuery(queryParams);
+  const { data: expensesResponse, isLoading: loadingExpenses } = trpc.getDetailedExpenses.useQuery(queryParams);
+  const expensesList = expensesResponse?.data || [];
+  const totalPages = expensesResponse?.totalPages || 1;
   const { data: analytics, isLoading: loadingAnalytics } = trpc.getExpenseAnalytics.useQuery(queryParams);
   
   const { data: accountsList } = trpc.getAccounts.useQuery();
@@ -268,7 +271,6 @@ export default function ExpensesPage() {
           </button>
         </div>
       </div>
-
       {/* Filter Section */}
       <div className="bg-brand-navy-light/40 border border-white/5 rounded-2xl p-6">
         <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-brand-gold"><Calendar size={20} /> تصفية السجل</h3>
@@ -276,7 +278,7 @@ export default function ExpensesPage() {
           {['daily', 'weekly', 'monthly', 'all', 'custom'].map(type => (
             <button 
               key={type}
-              onClick={() => setFilterType(type)}
+              onClick={() => { setFilterType(type); setPage(1); }}
               className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${filterType === type ? 'bg-brand-orange text-black' : 'bg-brand-black border border-white/10 text-gray-400 hover:text-white'}`}
             >
               {type === 'daily' ? 'اليوم' : type === 'weekly' ? 'هذا الأسبوع' : type === 'monthly' ? 'هذا الشهر' : type === 'all' ? 'الكل' : 'مخصص'}
@@ -377,7 +379,7 @@ export default function ExpensesPage() {
                 <label className="text-sm text-gray-400">🏷️ ربط بصنف في المخزون (اختياري)</label>
                 <select value={inventoryItemId} onChange={e => setInventoryItemId(e.target.value)} className="w-full bg-brand-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-brand-orange">
                   <option value="">— لا يوجد ربط بالمخزون —</option>
-                  {inventoryList?.map((inv: any) => <option key={inv.id} value={inv.id}>{inv.name} ({inv.unit}) — سعر حالي: {Number(inv.unitPrice).toFixed(3)} د.ب</option>)}
+                  {inventoryList?.data?.map((inv: any) => <option key={inv.id} value={inv.id}>{inv.name} ({inv.unit}) — سعر حالي: {Number(inv.unitPrice).toFixed(3)} د.ب</option>)}
                 </select>
                 {inventoryItemId && (
                   <p className="text-xs text-brand-gold mt-1">📦 سيتم تحديث المخزون بالكمية المدخلة مع إعادة حساب متوسط السعر</p>
@@ -602,6 +604,13 @@ export default function ExpensesPage() {
               )}
             </tbody>
           </table>
+          {totalPages > 1 && (
+            <div className="flex justify-between items-center p-4 border-t border-white/5 bg-brand-navy-light/10">
+              <button disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))} className="px-4 py-2 bg-white/5 rounded-xl disabled:opacity-50 text-white text-xs">السابق</button>
+              <span className="text-sm text-gray-400">صفحة {page} من {totalPages}</span>
+              <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="px-4 py-2 bg-white/5 rounded-xl disabled:opacity-50 text-white text-xs">التالي</button>
+            </div>
+          )}
         </div>
       </div>
     </div>

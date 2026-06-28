@@ -19,11 +19,16 @@ const TYPE_ICONS: Record<string, string> = {
 
 export default function WhatsAppLogsPage() {
   const [filterStatus, setFilterStatus] = useState<string | undefined>(undefined);
+  const [page, setPage] = useState(1);
   const utils = trpc.useContext();
 
-  const { data: logs, isLoading } = trpc.getWhatsAppLogs.useQuery(
-    filterStatus ? { status: filterStatus } : {},
-  );
+  const { data: logsResponse, isLoading } = trpc.getWhatsAppLogs.useQuery({
+    status: filterStatus,
+    page,
+    limit: 20
+  });
+  const logsList = logsResponse?.data || [];
+  const totalPages = logsResponse?.totalPages || 1;
   const retryMutation = trpc.retryWhatsAppMessage.useMutation({
     onSuccess: () => utils.getWhatsAppLogs.invalidate()
   });
@@ -47,7 +52,7 @@ export default function WhatsAppLogsPage() {
         {[undefined, "PENDING", "SENT", "FAILED"].map(status => (
           <button
             key={status ?? "ALL"}
-            onClick={() => setFilterStatus(status)}
+            onClick={() => { setFilterStatus(status); setPage(1); }}
             className={`px-5 py-2 rounded-2xl text-sm font-bold transition-colors border ${filterStatus === status ? 'bg-brand-orange text-black border-brand-orange' : 'bg-brand-navy border-white/10 text-gray-300 hover:border-brand-orange'}`}
           >
             {status === undefined ? "الكل" : STATUS_STYLES[status]?.label ?? status}
@@ -56,10 +61,10 @@ export default function WhatsAppLogsPage() {
       </div>
 
       {/* Stats */}
-      {logs && (
+      {logsResponse && (
         <div className="grid grid-cols-3 gap-4">
           {["SENT", "PENDING", "FAILED"].map(s => {
-            const count = logs.filter(l => l.status === s).length;
+            const count = logsList.filter((l: any) => l.status === s).length;
             const { label, class: cls } = STATUS_STYLES[s];
             return (
               <div key={s} className={`border rounded-3xl p-5 text-center ${cls}`}>
@@ -75,36 +80,45 @@ export default function WhatsAppLogsPage() {
       <div className="bg-brand-navy border border-white/10 rounded-3xl overflow-hidden">
         {isLoading ? (
           <div className="p-8 text-center text-gray-500 animate-pulse">جاري التحميل...</div>
-        ) : !logs?.length ? (
+        ) : !logsList?.length ? (
           <div className="p-12 text-center text-gray-500">
             <History size={40} className="mx-auto mb-4 opacity-20" />
-            <p>لا توجد سجلات بعد</p>
+            <p>لا يوجد سجلات حاليا</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/5 text-gray-400 text-xs uppercase tracking-widest">
-                  <th className="p-4 text-right">النوع</th>
+                  <th className="p-4 text-right">الرسالة</th>
+                  <th className="p-4 text-right">الكيان</th>
                   <th className="p-4 text-right">المستلم</th>
                   <th className="p-4 text-right">الحالة</th>
                   <th className="p-4 text-right">المحاولات</th>
                   <th className="p-4 text-right">الوقت</th>
-                  <th className="p-4 text-right">المرسِل</th>
+                  <th className="p-4 text-right">بواسطة</th>
                   <th className="p-4 text-center">إجراء</th>
                 </tr>
               </thead>
               <tbody>
-                {logs.map(log => {
+                {logsList.map((log: any) => {
                   const statusStyle = STATUS_STYLES[log.status] || STATUS_STYLES.PENDING;
                   const StatusIcon = statusStyle.icon;
                   return (
                     <tr key={log.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                       <td className="p-4">
                         <span className="flex items-center gap-2 font-bold">
-                          <span className="text-xl">{TYPE_ICONS[log.messageType] || "📩"}</span>
+                          <span className="text-xl">{TYPE_ICONS[log.messageType] || "💬"}</span>
                           <span className="text-xs text-gray-400">{log.messageType}</span>
                         </span>
+                      </td>
+                      <td className="p-4 text-xs font-bold text-gray-300">
+                        {log.relatedEntityType ? (
+                          <div className="flex flex-col">
+                            <span className="text-[10px] text-gray-500">{log.relatedEntityType}</span>
+                            <span>{log.relatedEntityId?.slice(-6).toUpperCase() || "-"}</span>
+                          </div>
+                        ) : "-"}
                       </td>
                       <td className="p-4 font-mono text-sm text-brand-gold dir-ltr">{log.recipient}</td>
                       <td className="p-4">
@@ -151,6 +165,13 @@ export default function WhatsAppLogsPage() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+        {totalPages > 1 && (
+          <div className="flex justify-between items-center p-4 border-t border-white/5 bg-brand-navy-light/10">
+            <button disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))} className="px-4 py-2 bg-white/5 rounded-xl disabled:opacity-50 text-white text-xs">السابق</button>
+            <span className="text-sm text-gray-400">صفحة {page} من {totalPages}</span>
+            <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="px-4 py-2 bg-white/5 rounded-xl disabled:opacity-50 text-white text-xs">التالي</button>
           </div>
         )}
       </div>

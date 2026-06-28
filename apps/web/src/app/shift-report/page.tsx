@@ -13,6 +13,7 @@ import html2canvas from "html2canvas";
 export default function ShiftReportPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [selectedReport, setSelectedReport] = useState<any>(null);
+  const [page, setPage] = useState(1);
 
   // Financial fields
   const [dailyIncome, setDailyIncome] = useState("0");
@@ -54,7 +55,9 @@ export default function ShiftReportPage() {
   const [cancelledOrdersCount, setCancelledOrdersCount] = useState("0");
 
   const utils = trpc.useContext();
-  const { data: reports, isLoading: loadingReports } = trpc.getShiftReports.useQuery();
+  const { data: reportsResponse, isLoading: loadingReports } = trpc.getShiftReports.useQuery({ page, limit: 20 });
+  const reportsList = reportsResponse?.data || [];
+  const totalPages = reportsResponse?.totalPages || 1;
   const { data: settings } = trpc.getSystemSettings.useQuery();
   const { data: todayStats } = trpc.getTodayShiftStats.useQuery();
   const { data: inventoryStats } = trpc.getAdvancedStats.useQuery();
@@ -764,9 +767,9 @@ export default function ShiftReportPage() {
         <div className="p-6 border-b border-white/5 flex justify-between items-center bg-brand-navy/80">
           <h3 className="font-black text-lg flex items-center gap-2">
             <FileSpreadsheet className="text-brand-orange" size={18} />
-            أرشيف تقارير نهاية الشفت والتدقيق اليومي
+            سجل تقارير نهاية الشفت السابقة
           </h3>
-          <span className="text-xs text-gray-400">الإجمالي: {reports?.length || 0} تقرير وردية</span>
+          <span className="text-xs text-gray-400">الإجمالي: {reportsList.length} تقارير (في هذه الصفحة)</span>
         </div>
 
         {loadingReports ? (
@@ -774,10 +777,10 @@ export default function ShiftReportPage() {
             <Loader2 className="animate-spin" size={40} />
             <span className="text-gray-400 animate-pulse text-sm">جاري تحميل سجلات الوردية...</span>
           </div>
-        ) : !reports || reports.length === 0 ? (
+        ) : reportsList.length === 0 ? (
           <div className="p-20 text-center text-gray-500">
             <AlertCircle className="mx-auto text-white/20 mb-3" size={48} />
-            <p className="text-sm">لم يتم تقديم أي تقارير شفت بعد.</p>
+            <p className="text-sm">لا يوجد تقارير سابقة مسجلة.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -797,7 +800,7 @@ export default function ShiftReportPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5 text-sm">
-                {reports.map((row) => {
+                {reportsList.map((row: any) => {
                   const hasDifference = Math.abs(row.difference) > 0.05;
                   const checklistPassed = row.cleanlinessInternal && row.cleanlinessExternal && row.electricityStatus && row.fridgeStatus && row.blenderStatus && row.iceMachineStatus;
 
@@ -878,6 +881,13 @@ export default function ShiftReportPage() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+        {totalPages > 1 && (
+          <div className="flex justify-between items-center p-4 border-t border-white/5 bg-brand-navy-light/10">
+            <button disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))} className="px-4 py-2 bg-white/5 rounded-xl disabled:opacity-50 text-white text-xs">السابق</button>
+            <span className="text-sm text-gray-400">صفحة {page} من {totalPages}</span>
+            <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="px-4 py-2 bg-white/5 rounded-xl disabled:opacity-50 text-white text-xs">التالي</button>
           </div>
         )}
       </div>

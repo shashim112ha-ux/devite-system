@@ -21,13 +21,16 @@ export default function SalesPage() {
   const [editPayment, setEditPayment] = useState('');
   const [editFromAccount, setEditFromAccount] = useState('');
   const [editToAccount, setEditToAccount] = useState('');
+  const [page, setPage] = useState(1);
 
   const userRole = typeof window !== 'undefined' ? localStorage.getItem('userRole') : null;
   const isAdminOrManager = userRole === 'ADMIN' || userRole === 'MANAGER';
 
-  const queryParams = { filterType, ...(filterType === 'custom' ? { startDate, endDate } : {}) };
+  const queryParams = { filterType, page, limit: 20, ...(filterType === 'custom' ? { startDate, endDate } : {}) };
   
-  const { data: salesList, isLoading: loadingSales, refetch: refetchSales } = trpc.getDetailedSalesLog.useQuery(queryParams);
+  const { data: salesResponse, isLoading: loadingSales, refetch: refetchSales } = trpc.getDetailedSalesLog.useQuery(queryParams);
+  const salesList = salesResponse?.data || [];
+  const totalPages = salesResponse?.totalPages || 1;
   const { data: analytics, isLoading: loadingAnalytics } = trpc.getSalesAnalytics.useQuery(queryParams);
   const { data: accounts } = trpc.getAccounts.useQuery();
   const utils = trpc.useContext();
@@ -216,7 +219,7 @@ export default function SalesPage() {
         </div>
         <div className="flex gap-2 flex-wrap">
           {['daily', 'weekly', 'monthly', 'custom', 'all'].map(f => (
-            <button key={f} onClick={() => setFilterType(f)}
+            <button key={f} onClick={() => { setFilterType(f); setPage(1); }}
               className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${filterType === f ? 'bg-brand-gold text-black' : 'bg-brand-navy border border-white/10 text-gray-400 hover:text-white'}`}>
               {f === 'daily' ? 'اليوم' : f === 'weekly' ? 'الأسبوع' : f === 'monthly' ? 'الشهر' : f === 'custom' ? 'مخصص' : 'الكل'}
             </button>
@@ -295,8 +298,8 @@ export default function SalesPage() {
             <FileText className="text-brand-orange" size={20} /> سجل الطلبات المفصل
           </h3>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-gray-400">{salesList?.length || 0} طلب مسجل</span>
-            <button onClick={() => refetchSales()} className="p-2 text-gray-400 hover:text-white bg-white/5 rounded-xl transition-colors">
+            <span className="text-xs text-gray-400">{salesList?.length || 0} طلب في هذه الصفحة</span>
+            <button onClick={() => { setPage(1); refetchSales(); }} className="p-2 text-gray-400 hover:text-white bg-white/5 rounded-xl transition-colors">
               <RefreshCw size={14} />
             </button>
           </div>
@@ -374,6 +377,13 @@ export default function SalesPage() {
             </tbody>
           </table>
         </div>
+        {totalPages > 1 && (
+            <div className="flex justify-between items-center p-4 border-t border-white/5 bg-brand-navy-light/10">
+              <button disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))} className="px-4 py-2 bg-white/5 rounded-xl disabled:opacity-50 text-white text-xs">السابق</button>
+              <span className="text-sm text-gray-400">صفحة {page} من {totalPages}</span>
+              <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="px-4 py-2 bg-white/5 rounded-xl disabled:opacity-50 text-white text-xs">التالي</button>
+            </div>
+        )}
       </div>
     </div>
   );

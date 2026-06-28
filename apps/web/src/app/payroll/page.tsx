@@ -17,6 +17,7 @@ export default function PayrollPage() {
   const [editRow, setEditRow] = useState<any>(null);
   const [payRow, setPayRow] = useState<any>(null);
   const [selectedAccountId, setSelectedAccountId] = useState<string>("");
+  const [page, setPage] = useState(1);
 
   const [bonusVal, setBonusVal] = useState<number>(0);
   const [deductVal, setDeductVal] = useState<number>(0);
@@ -28,9 +29,13 @@ export default function PayrollPage() {
   const handlePrint = useReactToPrint({ contentRef: printRef, documentTitle: "Salary_Slip" });
 
   const utils = trpc.useContext();
-  const { data: payrollList, isLoading: loadingList } = trpc.getPayrollList.useQuery(
-    selectedUser ? { userId: selectedUser } : {}
-  );
+  const { data: payrollResponse, isLoading: loadingList } = trpc.getPayrollList.useQuery({
+    userId: selectedUser || undefined,
+    page,
+    limit: 20
+  });
+  const payrollList = payrollResponse?.data || [];
+  const totalPages = payrollResponse?.totalPages || 1;
   const { data: staffList } = trpc.getStaff.useQuery();
   const { data: accountsList } = trpc.getAccounts.useQuery();
 
@@ -319,6 +324,13 @@ export default function PayrollPage() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+        {totalPages > 1 && (
+          <div className="flex justify-between items-center p-4 border-t border-white/5 bg-brand-navy-light/10">
+            <button disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))} className="px-4 py-2 bg-white/5 rounded-xl disabled:opacity-50 text-white text-xs">السابق</button>
+            <span className="text-sm text-gray-400">صفحة {page} من {totalPages}</span>
+            <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="px-4 py-2 bg-white/5 rounded-xl disabled:opacity-50 text-white text-xs">التالي</button>
           </div>
         )}
       </div>

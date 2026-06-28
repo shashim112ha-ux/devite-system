@@ -12,10 +12,12 @@ import {
   cashierProcedure, 
   kitchenProcedure,
   staffProcedure,
-  investorProcedure
+  investorProcedure,
+  performanceMetrics,
+  errorLogs
 } from './trpc';
 import { io } from './index';
-import { queueWhatsAppMessage, DEFAULT_TEMPLATES, generateShiftReportPDF, fillTemplate, getWhatsAppState, restartWhatsApp } from './services/whatsapp';
+import { queueWhatsAppMessage, DEFAULT_TEMPLATES, generateShiftReportPDF, fillTemplate, getWhatsAppState, restartWhatsApp, lastWorkerRunTime, isProcessingQueue } from './services/whatsapp';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'devite_super_secret_key';
 
@@ -94,10 +96,12 @@ export const appRouter = router({
           if (ing.inventoryItem.quantity < ing.amountRequired) varStockAvailable = false;
           varAutoCost += (ing.amountRequired * ing.inventoryItem.unitPrice);
         });
+        const finalVarCost = variant.ingredients.length > 0 ? Math.round(varAutoCost * 1000) / 1000 : variant.autoCost;
         return {
           ...variant,
-          autoCost: variant.ingredients.length > 0 ? Math.round(varAutoCost * 1000) / 1000 : variant.autoCost,
-          dynamicAvailable: variant.isAvailable && (variant.ingredients.length === 0 || varStockAvailable)
+          autoCost: finalVarCost,
+          dynamicAvailable: variant.isAvailable && (variant.ingredients.length === 0 || varStockAvailable),
+          isLossMaking: variant.price > 0 && finalVarCost > variant.price
         };
       });
 
@@ -106,11 +110,15 @@ export const appRouter = router({
       const hasVariants = processedVariants.length > 0;
       const anyVariantAvailable = processedVariants.some(v => v.dynamicAvailable);
       
+      const finalProductCost = Math.round(autoCost * 1000) / 1000;
+      const isLossMaking = product.price > 0 && finalProductCost > product.price;
+
       return {
         ...product,
         variants: processedVariants,
-        autoCost: Math.round(autoCost * 1000) / 1000,
-        dynamicAvailable: product.available && (hasVariants ? anyVariantAvailable : (product.ingredients.length === 0 || isStockAvailable))
+        autoCost: finalProductCost,
+        dynamicAvailable: product.available && (hasVariants ? anyVariantAvailable : (product.ingredients.length === 0 || isStockAvailable)),
+        isLossMaking: hasVariants ? processedVariants.some(v => v.isLossMaking) : isLossMaking
       };
     });
 
@@ -439,6 +447,32 @@ export const appRouter = router({
           }
         }
         
+        if (input.status === 'READY' && order.customer?.phone) {
+          await queueWhatsAppMessage({
+            prisma: tx,
+            recipient: order.customer.phone,
+            messageType: 'ORDER_READY',
+            templateKey: 'ORDER_READY',
+            payload: { orderNumber: order.orderNumber.toString() },
+            relatedEntityType: 'ORDER',
+            relatedEntityId: order.id,
+            userId: ctx.user?.id
+          });
+        }
+
+        if (input.status === 'CANCELLED' && order.customer?.phone) {
+          await queueWhatsAppMessage({
+            prisma: tx,
+            recipient: order.customer.phone,
+            messageType: 'ORDER_CANCELLED',
+            templateKey: 'ORDER_CANCELLED',
+            payload: { orderNumber: order.orderNumber.toString() },
+            relatedEntityType: 'ORDER',
+            relatedEntityId: order.id,
+            userId: ctx.user?.id
+          });
+        }
+
         await logAudit(tx, ctx.user.id, 'UPDATE_ORDER_STATUS', `تم تحديث حالة الطلب #${order.orderNumber} إلى ${order.status}`);
         io?.emit('order_status_updated', order);
         return order;
@@ -466,6 +500,8 @@ export const appRouter = router({
       paymentMethod: z.string(),
       total: z.number(),
       notes: z.string().optional(),
+      overrideInventory: z.boolean().optional(),
+      overrideReason: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
         return ctx.prisma.$transaction(async (tx) => {
@@ -481,24 +517,37 @@ export const appRouter = router({
           const productMap = new Map(products.map(p => [p.id, p]));
 
           // 1. Check Inventory quantities first (fail-fast validation)
+          const missingItemsList: any[] = [];
           for (const item of input.items) {
             const product = productMap.get(item.productId);
-          if (product) {
-            const ingredientsToUse = item.variantId 
-              ? (product.variants.find(v => v.id === item.variantId)?.ingredients || [])
-              : product.ingredients;
+            if (product) {
+              const ingredientsToUse = item.variantId 
+                ? (product.variants.find(v => v.id === item.variantId)?.ingredients || [])
+                : product.ingredients;
 
-            for (const ing of ingredientsToUse) {
-              const needed = ing.amountRequired * item.quantity;
-              if (ing.inventoryItem.quantity < needed) {
-                throw new TRPCError({ 
-                  code: 'BAD_REQUEST', 
-                  message: `مخزون غير كافٍ للمادة: ${ing.inventoryItem.name}. المتبقي: ${ing.inventoryItem.quantity} ${ing.inventoryItem.unit}` 
-                });
+              for (const ing of ingredientsToUse) {
+                const needed = ing.amountRequired * item.quantity;
+                if (ing.inventoryItem.quantity < needed) {
+                  if (!input.overrideInventory) {
+                    throw new TRPCError({ 
+                      code: 'BAD_REQUEST', 
+                      message: `مخزون غير كافٍ للمادة: ${ing.inventoryItem.name}. المتبقي: ${ing.inventoryItem.quantity} ${ing.inventoryItem.unit} --MISSING_STOCK` 
+                    });
+                  } else {
+                    if (ctx.user?.role !== 'ADMIN' && ctx.user?.role !== 'MANAGER') {
+                       throw new TRPCError({ code: 'UNAUTHORIZED', message: 'ليس لديك صلاحية تجاوز المخزون. اطلب موافقة المدير.' });
+                    }
+                    missingItemsList.push({
+                       product: product.name,
+                       ingredient: ing.inventoryItem.name,
+                       needed,
+                       available: ing.inventoryItem.quantity
+                    });
+                  }
+                }
               }
             }
           }
-        }
 
         // 2. Estimate preparation time (Smart Prep Time Engine)
         const pendingOrders = await tx.order.count({
@@ -584,6 +633,32 @@ export const appRouter = router({
           }
         });
 
+        if (missingItemsList.length > 0 && input.overrideInventory) {
+           await tx.inventoryOverrideLog.create({
+             data: {
+               orderId: order.id,
+               missingItemsJson: JSON.stringify(missingItemsList),
+               approvedBy: ctx.user?.name || 'SYSTEM',
+               reason: input.overrideReason || 'بدون سبب'
+             }
+           });
+           await tx.auditLog.create({
+             data: {
+               userId: ctx.user?.id || 'SYSTEM',
+               action: 'INVENTORY_OVERRIDE',
+               details: `تم تجاوز نقص المخزون للطلب رقم ${order.orderNumber}`
+             }
+           });
+           await tx.orderTimelineStep.create({
+             data: {
+               orderId: order.id,
+               stage: 'OVERRIDE_APPLIED',
+               staffId: ctx.user?.id,
+               durationSeconds: 0
+             }
+           });
+        }
+
         // 5. Decrement Inventory & Generate Warnings
         for (const item of input.items) {
           const product = productMap.get(item.productId);
@@ -593,21 +668,39 @@ export const appRouter = router({
               : product.ingredients;
 
             for (const ing of ingredientsToUse) {
-              const updated = await tx.inventoryItem.update({
-                where: { id: ing.inventoryItemId },
-                data: { quantity: { decrement: ing.amountRequired * item.quantity } }
-              });
+              const needed = ing.amountRequired * item.quantity;
+              const deductAmount = Math.min(needed, ing.inventoryItem.quantity); // Prevent going negative
 
-              // Threshold alert
-              if (updated.quantity <= updated.minThreshold) {
-                const msg = `تنبيه المخزون: المادة (${updated.name}) وصلت للحد الأدنى المسموح به (${updated.quantity} ${updated.unit})`;
-                await tx.notification.create({
+              if (deductAmount > 0) {
+                const updated = await tx.inventoryItem.update({
+                  where: { id: ing.inventoryItemId },
+                  data: { quantity: { decrement: deductAmount } }
+                });
+
+                await tx.inventoryMovement.create({
                   data: {
-                    type: 'WARNING',
-                    message: msg
+                    inventoryItemId: ing.inventoryItemId,
+                    type: 'ORDER_DEDUCTION',
+                    quantityChange: -deductAmount,
+                    quantityBefore: updated.quantity + deductAmount,
+                    quantityAfter: updated.quantity,
+                    relatedOrderId: order.id,
+                    reason: `طلب مبيعات رقم ${order.orderNumber}`,
+                    createdBy: ctx.user?.name || 'النظام'
                   }
                 });
-                io?.emit('low_stock_warning', { id: updated.id, name: updated.name, quantity: updated.quantity, unit: updated.unit });
+
+                // Threshold alert
+                if (updated.quantity <= updated.minThreshold) {
+                  const msg = `تنبيه المخزون: المادة (${updated.name}) وصلت للحد الأدنى المسموح به (${updated.quantity} ${updated.unit})`;
+                  await tx.notification.create({
+                    data: {
+                      type: 'WARNING',
+                      message: msg
+                    }
+                  });
+                  io?.emit('low_stock_warning', { id: updated.id, name: updated.name, quantity: updated.quantity, unit: updated.unit });
+                }
               }
             }
           }
@@ -636,6 +729,19 @@ export const appRouter = router({
              where: { id: account.id },
              data: { balance: { increment: input.total } }
           });
+
+          if (input.customerPhone) {
+            await queueWhatsAppMessage({
+              prisma: tx,
+              recipient: input.customerPhone,
+              messageType: 'ORDER_CREATED',
+              templateKey: 'ORDER_CREATED',
+              payload: { customerName: order.customer?.name || 'عميل', orderNumber: order.orderNumber.toString(), estimatedTime: order.estimatedTime.toString() },
+              relatedEntityType: 'ORDER',
+              relatedEntityId: order.id,
+              userId: ctx.user?.id
+            });
+          }
 
           io?.emit('order_created', order);
           return order;
@@ -713,85 +819,83 @@ export const appRouter = router({
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const orders = await ctx.prisma.order.findMany({
-      where: { createdAt: { gte: today } },
-      include: { items: { include: { product: { include: { ingredients: { include: { inventoryItem: true } } } } } } }
+    let summary = await ctx.prisma.dailyFinancialSummary.findUnique({
+      where: { date: today }
     });
-    const expenses = await ctx.prisma.expense.findMany({
-      where: { date: { gte: today } }
-    });
-    
-    const todayOrders = orders.filter(o => o.createdAt >= today);
-    const sales = todayOrders.reduce((sum, o) => sum + o.total, 0);
-    const ordersCount = todayOrders.length;
-    
-    // Accurate Profit (Sales - Cost - Expenses)
-    const totalCostOfGoods = todayOrders.reduce((sum, order) => {
-      return sum + order.items.reduce((itemSum, item) => {
-        let autoCost = 0;
-        if (item.product.ingredients && item.product.ingredients.length > 0) {
-           autoCost = item.product.ingredients.reduce((c, ing) => c + (ing.amountRequired * ing.inventoryItem.unitPrice), 0);
-        } else {
-           autoCost = item.product.cost; // fallback to manual cost
+
+    if (!summary) {
+      const [salesAgg, expensesAgg] = await Promise.all([
+        ctx.prisma.order.aggregate({
+          _sum: { total: true, profit: true },
+          _count: { id: true },
+          where: { createdAt: { gte: today }, status: { not: 'CANCELLED' } }
+        }),
+        ctx.prisma.expense.aggregate({
+          _sum: { amount: true },
+          where: { date: { gte: today } }
+        })
+      ]);
+
+      const sales = salesAgg._sum.total || 0;
+      const profit = salesAgg._sum.profit || 0;
+      const totalExpenses = expensesAgg._sum.amount || 0;
+      const ordersCount = salesAgg._count.id || 0;
+      const netProfit = profit - totalExpenses;
+
+      summary = await ctx.prisma.dailyFinancialSummary.create({
+        data: {
+          date: today,
+          totalSales: sales,
+          totalProfit: profit,
+          totalExpenses,
+          netProfit,
+          orderCount: ordersCount
         }
-        return itemSum + (autoCost * item.quantity);
-      }, 0);
-    }, 0);
-    const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
-    const profit = sales - totalCostOfGoods - totalExpenses;
+      });
+    }
 
     const accounts = await ctx.prisma.account.findMany();
     const totalBalance = accounts.reduce((sum, acc) => sum + acc.balance, 0);
-
-    // Peak Hour
-    const hours = todayOrders.map(o => o.createdAt.getHours());
-    const peakHour = hours.length > 0 ? hours.sort((a,b) => hours.filter(v => v===a).length - hours.filter(v => v===b).length).pop() : 12;
-
-    // Top Product
-    const productCounts: Record<string, number> = {};
-    todayOrders.forEach(o => o.items.forEach(i => {
-      productCounts[i.product.name] = (productCounts[i.product.name] || 0) + i.quantity;
-    }));
-    const topProduct = Object.keys(productCounts).length > 0 
-      ? Object.keys(productCounts).reduce((a, b) => productCounts[a] > productCounts[b] ? a : b) 
-      : 'لا يوجد';
-
-    const readyOrders = todayOrders.filter(o => o.status === 'READY' || o.status === 'DELIVERED');
-    const avgPrepTime = readyOrders.length > 0 
-      ? Math.round(readyOrders.reduce((sum, o) => sum + (o.updatedAt.getTime() - o.createdAt.getTime()) / 60000, 0) / readyOrders.length)
-      : 0;
-
-    const cash = todayOrders.filter(o => o.paymentMethod === 'CASH').reduce((sum, o) => sum + o.total, 0);
-    const card = todayOrders.filter(o => o.paymentMethod === 'CARD').reduce((sum, o) => sum + o.total, 0);
-    const benefit = todayOrders.filter(o => o.paymentMethod === 'BENEFIT').reduce((sum, o) => sum + o.total, 0);
-    const online = todayOrders.filter(o => o.paymentMethod === 'ONLINE').reduce((sum, o) => sum + o.total, 0);
-
-    const inventory = await ctx.prisma.inventoryItem.findMany();
-    const lowStock = inventory.filter(i => i.quantity <= i.minThreshold).map(i => ({ id: i.id, name: i.name, quantity: i.quantity, unit: i.unit, minThreshold: i.minThreshold }));
-    const sevenDaysFromNow = new Date();
-    sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
-    const nearExpiry = inventory.filter(i => i.expiryDate && i.expiryDate <= sevenDaysFromNow).map(i => ({ id: i.id, name: i.name, expiryDate: i.expiryDate, quantity: i.quantity, unit: i.unit }));
-
     const accountsBreakdown = accounts.map(acc => ({ id: acc.id, name: acc.name, type: acc.type, balance: acc.balance }));
 
+    const lowStock = await ctx.prisma.inventoryItem.findMany({
+      where: { quantity: { lte: 5 } },
+      take: 10
+    });
+    
+    const sevenDaysFromNow = new Date();
+    sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+    const nearExpiry = await ctx.prisma.inventoryItem.findMany({
+      where: { expiryDate: { lte: sevenDaysFromNow } },
+      take: 10
+    });
+
+    const activeOrders = await ctx.prisma.order.groupBy({
+      by: ['status'],
+      where: { createdAt: { gte: today } },
+      _count: true
+    });
+    const preparingCount = activeOrders.find(o => o.status === 'PREPARING')?._count || 0;
+    const readyCount = activeOrders.find(o => o.status === 'READY')?._count || 0;
+
     return {
-      sales,
-      ordersCount,
-      profit,
-      totalExpenses,
+      sales: summary.totalSales,
+      ordersCount: summary.orderCount,
+      profit: summary.totalProfit,
+      totalExpenses: summary.totalExpenses,
       totalBalance,
-      avgPrepTime,
-      preparingCount: todayOrders.filter(o => o.status === 'PREPARING').length,
-      readyCount: todayOrders.filter(o => o.status === 'READY').length,
-      topProduct,
-      peakHour,
-      cash,
-      card,
-      benefit,
-      online,
-      accountsBreakdown,
+      avgPrepTime: 0,
+      preparingCount,
+      readyCount,
+      topProduct: "-",
+      peakHour: 12,
+      cash: summary.cashSales,
+      card: summary.cardSales,
+      benefit: summary.benefitSales,
+      online: summary.onlineSales,
       lowStock,
-      nearExpiry
+      nearExpiry,
+      accountsBreakdown
     };
   }),
 
@@ -865,9 +969,36 @@ export const appRouter = router({
     }),
 
   // --- المخزون (Smart Inventory) ---
-  getInventory: staffProcedure.query(async ({ ctx }) => {
-    return ctx.prisma.inventoryItem.findMany();
-  }),
+  getInventory: staffProcedure
+    .input(z.object({
+      search: z.string().optional(),
+      page: z.number().optional().default(1),
+      limit: z.number().optional().default(20)
+    }).optional())
+    .query(async ({ input, ctx }) => {
+      const page = input?.page || 1;
+      const limit = input?.limit || 20;
+      const skip = (page - 1) * limit;
+
+      const where = input?.search ? {
+        OR: [
+          { name: { contains: input.search } },
+          { category: { contains: input.search } }
+        ]
+      } : {};
+
+      const [data, total] = await Promise.all([
+        ctx.prisma.inventoryItem.findMany({
+          where,
+          take: limit,
+          skip,
+          orderBy: { name: 'asc' }
+        }),
+        ctx.prisma.inventoryItem.count({ where })
+      ]);
+
+      return { data, total, page, totalPages: Math.ceil(total / limit) };
+    }),
 
   addInventoryItem: staffProcedure
     .input(z.object({ name: z.string(), quantity: z.number(), unit: z.string(), minThreshold: z.number(), unitPrice: z.number(), supplier: z.string().nullable().optional(), category: z.string().nullable().optional() }))
@@ -925,6 +1056,20 @@ export const appRouter = router({
             reason: reason || "تعديل إداري",
           }
         });
+        if (data.quantity !== undefined) {
+          await ctx.prisma.inventoryMovement.create({
+            data: {
+              inventoryItemId: id,
+              type: 'MANUAL_ADJUSTMENT',
+              quantityChange: item.quantity - oldItem.quantity,
+              quantityBefore: oldItem.quantity,
+              quantityAfter: item.quantity,
+              unitCost: item.unitPrice,
+              reason: reason || "تعديل إداري",
+              createdBy: ctx.user.name
+            }
+          });
+        }
       }
 
       // Recalculate product costs if price changed
@@ -985,6 +1130,7 @@ export const appRouter = router({
     .input(z.object({
       inventoryItemId: z.string(),
       quantity: z.number().min(0.01),
+      location: z.string().optional(), // 'TRUCK', 'HOME', 'STORAGE'
       reason: z.string(),
       notes: z.string().optional()
     }))
@@ -992,27 +1138,33 @@ export const appRouter = router({
       const item = await ctx.prisma.inventoryItem.findUnique({ where: { id: input.inventoryItemId } });
       if (!item) throw new TRPCError({ code: 'NOT_FOUND', message: "العنصر غير موجود" });
 
-      if (item.quantity < input.quantity) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: "الكمية التالفة أكبر من الكمية المتوفرة في المخزون" });
+      let oldQty = 0;
+      if (input.location === 'HOME') {
+        oldQty = item.homeQuantity;
+        if (oldQty < input.quantity) throw new TRPCError({ code: 'BAD_REQUEST', message: "الكمية التالفة أكبر من المتوفر في البيت" });
+        await ctx.prisma.inventoryItem.update({ where: { id: input.inventoryItemId }, data: { homeQuantity: { decrement: input.quantity } } });
+      } else if (input.location === 'STORAGE') {
+        oldQty = item.storageQuantity;
+        if (oldQty < input.quantity) throw new TRPCError({ code: 'BAD_REQUEST', message: "الكمية التالفة أكبر من المتوفر في المخزن" });
+        await ctx.prisma.inventoryItem.update({ where: { id: input.inventoryItemId }, data: { storageQuantity: { decrement: input.quantity } } });
+      } else {
+        oldQty = item.quantity;
+        if (oldQty < input.quantity) throw new TRPCError({ code: 'BAD_REQUEST', message: "الكمية التالفة أكبر من المتوفر في العربة" });
+        await ctx.prisma.inventoryItem.update({ where: { id: input.inventoryItemId }, data: { quantity: { decrement: input.quantity } } });
       }
 
-      // Deduct from inventory
-      const updatedItem = await ctx.prisma.inventoryItem.update({
-        where: { id: input.inventoryItemId },
-        data: { quantity: { decrement: input.quantity } }
-      });
-
-      // Log audit
-      await ctx.prisma.inventoryAuditLog.create({
+      await ctx.prisma.inventoryMovement.create({
         data: {
           inventoryItemId: item.id,
-          userId: ctx.user.id,
-          userName: ctx.user.name,
-          oldQuantity: item.quantity,
-          newQuantity: updatedItem.quantity,
-          oldPrice: item.unitPrice,
-          newPrice: item.unitPrice,
-          reason: 'إتلاف: ' + input.reason + (input.notes ? ` - ${input.notes}` : '')
+          type: 'DAMAGED',
+          quantityChange: -input.quantity,
+          quantityBefore: oldQty,
+          quantityAfter: oldQty - input.quantity,
+          unitCost: item.unitPrice,
+          totalCost: item.unitPrice * input.quantity,
+          fromLocation: input.location || 'TRUCK',
+          reason: input.reason + (input.notes ? ` - ${input.notes}` : ''),
+          createdBy: ctx.user.name
         }
       });
 
@@ -1032,9 +1184,77 @@ export const appRouter = router({
         }
       });
 
-      await logAudit(ctx.prisma, ctx.user.id, 'REPORT_DAMAGED', `تسجيل تالف: ${input.quantity} ${item.unit} من ${item.name}`);
-      
-      return updatedItem;
+      await logAudit(ctx.prisma, ctx.user.id, 'REPORT_DAMAGED', `تسجيل تالف: ${input.quantity} من ${item.name}`);
+      return { success: true };
+    }),
+
+  transferInventory: managerProcedure
+    .input(z.object({
+      inventoryItemId: z.string(),
+      fromLocation: z.string(), // 'TRUCK', 'HOME', 'STORAGE'
+      toLocation: z.string(),   // 'TRUCK', 'HOME', 'STORAGE'
+      quantity: z.number().min(0.01),
+      reason: z.string().optional()
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const item = await ctx.prisma.inventoryItem.findUnique({ where: { id: input.inventoryItemId } });
+      if (!item) throw new TRPCError({ code: 'NOT_FOUND', message: "العنصر غير موجود" });
+
+      if (input.fromLocation === input.toLocation) throw new TRPCError({ code: 'BAD_REQUEST', message: "لا يمكن التحويل لنفس الموقع" });
+
+      // 1. Check & Deduct from source
+      let qtyBeforeSource = 0;
+      if (input.fromLocation === 'HOME') {
+        qtyBeforeSource = item.homeQuantity;
+        if (qtyBeforeSource < input.quantity) throw new TRPCError({ code: 'BAD_REQUEST', message: "الكمية غير كافية في البيت" });
+        await ctx.prisma.inventoryItem.update({ where: { id: item.id }, data: { homeQuantity: { decrement: input.quantity } } });
+      } else if (input.fromLocation === 'STORAGE') {
+        qtyBeforeSource = item.storageQuantity;
+        if (qtyBeforeSource < input.quantity) throw new TRPCError({ code: 'BAD_REQUEST', message: "الكمية غير كافية في المخزن" });
+        await ctx.prisma.inventoryItem.update({ where: { id: item.id }, data: { storageQuantity: { decrement: input.quantity } } });
+      } else {
+        qtyBeforeSource = item.quantity;
+        if (qtyBeforeSource < input.quantity) throw new TRPCError({ code: 'BAD_REQUEST', message: "الكمية غير كافية في العربة" });
+        await ctx.prisma.inventoryItem.update({ where: { id: item.id }, data: { quantity: { decrement: input.quantity } } });
+      }
+
+      // 2. Add to destination
+      if (input.toLocation === 'HOME') {
+        await ctx.prisma.inventoryItem.update({ where: { id: item.id }, data: { homeQuantity: { increment: input.quantity } } });
+      } else if (input.toLocation === 'STORAGE') {
+        await ctx.prisma.inventoryItem.update({ where: { id: item.id }, data: { storageQuantity: { increment: input.quantity } } });
+      } else {
+        await ctx.prisma.inventoryItem.update({ where: { id: item.id }, data: { quantity: { increment: input.quantity } } });
+      }
+
+      // 3. Log movement
+      await ctx.prisma.inventoryMovement.create({
+        data: {
+          inventoryItemId: item.id,
+          type: `TRANSFER_TO_${input.toLocation}`,
+          quantityChange: input.quantity,
+          quantityBefore: qtyBeforeSource,
+          quantityAfter: qtyBeforeSource - input.quantity,
+          fromLocation: input.fromLocation,
+          toLocation: input.toLocation,
+          reason: input.reason || 'تحويل مخزون',
+          createdBy: ctx.user.name
+        }
+      });
+
+      return { success: true };
+    }),
+
+  getInventoryMovements: managerProcedure
+    .input(z.object({
+      inventoryItemId: z.string().optional()
+    }))
+    .query(async ({ input, ctx }) => {
+      return ctx.prisma.inventoryMovement.findMany({
+        where: input.inventoryItemId ? { inventoryItemId: input.inventoryItemId } : undefined,
+        orderBy: { createdAt: 'desc' },
+        take: 100
+      });
     }),
 
   updateInventoryStock: staffProcedure
@@ -1122,13 +1342,29 @@ export const appRouter = router({
     }),
 
   getAttendanceHistory: managerProcedure
-    .input(z.object({ userId: z.string().optional() }))
+    .input(z.object({ 
+      userId: z.string().optional(),
+      page: z.number().optional().default(1),
+      limit: z.number().optional().default(20)
+    }).optional())
     .query(async ({ input, ctx }) => {
-      return ctx.prisma.attendance.findMany({
-        where: input.userId ? { userId: input.userId } : undefined,
-        include: { user: true },
-        orderBy: { checkIn: 'desc' }
-      });
+      const page = input?.page || 1;
+      const limit = input?.limit || 20;
+      const skip = (page - 1) * limit;
+      const where = input?.userId ? { userId: input.userId } : undefined;
+
+      const [data, total] = await Promise.all([
+        ctx.prisma.attendance.findMany({
+          where,
+          include: { user: true },
+          orderBy: { checkIn: 'desc' },
+          take: limit,
+          skip
+        }),
+        ctx.prisma.attendance.count({ where })
+      ]);
+
+      return { data, total, page, totalPages: Math.ceil(total / limit) };
     }),
 
   adminAddAttendance: managerProcedure
@@ -1231,6 +1467,32 @@ export const appRouter = router({
       io?.emit('attendance_event', { type: 'CHECK_OUT', userId: att.userId });
       return att;
     }),
+
+  runMidnightCheckout: publicProcedure.mutation(async ({ ctx }) => {
+    // This can be triggered by CRON job
+    const openAttendances = await ctx.prisma.attendance.findMany({
+      where: { checkOut: null }
+    });
+
+    for (const att of openAttendances) {
+      await ctx.prisma.attendance.update({
+        where: { id: att.id },
+        data: { 
+          checkOut: new Date(), 
+          autoCheckout: true,
+          checkoutSource: 'AUTO_MIDNIGHT'
+        }
+      });
+      await ctx.prisma.notification.create({
+        data: {
+          type: 'WARNING',
+          message: `تنبيه: تم تسجيل انصراف تلقائي للموظف (تسجيل رقم: ${att.id}) بسبب إغلاق اليوم. يرجى المراجعة.`
+        }
+      });
+      io?.emit('attendance_event', { type: 'CHECK_OUT', userId: att.userId });
+    }
+    return { success: true, count: openAttendances.length };
+  }),
 
   // --- شؤون المستثمرين وتوزيع الأرباح (Investors Panel) ---
   getInvestors: adminProcedure.query(async ({ ctx }) => {
@@ -1473,13 +1735,29 @@ export const appRouter = router({
 
   // --- Payroll Engine ---
   getPayrollList: managerProcedure
-    .input(z.object({ userId: z.string().optional() }))
+    .input(z.object({ 
+      userId: z.string().optional(),
+      page: z.number().optional().default(1),
+      limit: z.number().optional().default(20)
+    }).optional())
     .query(async ({ input, ctx }) => {
-      return ctx.prisma.payroll.findMany({
-        where: input.userId ? { userId: input.userId } : undefined,
-        include: { user: true },
-        orderBy: { startDate: 'desc' }
-      });
+      const page = input?.page || 1;
+      const limit = input?.limit || 20;
+      const skip = (page - 1) * limit;
+      const where = input?.userId ? { userId: input.userId } : undefined;
+
+      const [data, total] = await Promise.all([
+        ctx.prisma.payroll.findMany({
+          where,
+          include: { user: true },
+          orderBy: { startDate: 'desc' },
+          take: limit,
+          skip
+        }),
+        ctx.prisma.payroll.count({ where })
+      ]);
+
+      return { data, total, page, totalPages: Math.ceil(total / limit) };
     }),
 
   calculatePayrollForPeriod: managerProcedure
@@ -1740,35 +2018,41 @@ export const appRouter = router({
         });
         if (!report) throw new Error('التقرير غير موجود');
 
-        // Generate PDF
-        const pdfBuffer = await generateShiftReportPDF(report);
-
-        // Fill Template
-        const template = DEFAULT_TEMPLATES['SHIFT_REPORT'];
-        const body = fillTemplate(template.body, {
-          shiftName: new Date(report.date).toLocaleDateString('ar-BH'),
-          managerName: report.cashier?.name || 'غير معروف',
-          cashTotal: report.cashAmount.toFixed(3),
-          onlineTotal: report.cardAmount.toFixed(3),
-          expenses: report.expenses.toFixed(3),
-          netProfit: report.netProfit.toFixed(3),
-          cleanliness: report.cleanlinessInternal ? 'ممتاز' : 'يحتاج انتباه'
+        await queueWhatsAppMessage({
+          prisma: ctx.prisma,
+          recipient: input.phone,
+          messageType: 'SHIFT_REPORT',
+          templateKey: 'SHIFT_REPORT',
+          payload: { report },
+          relatedEntityType: 'SHIFT_REPORT',
+          relatedEntityId: report.id,
+          userId: ctx.user.id
         });
-
-        // Queue message with PDF (using the base64 string or we can send it directly since queueWhatsAppMessage doesn't store PDFs in DB in our stub)
-        // Since we didn't add PDF buffer to the DB, we can send it directly right here!
-        const { sendWhatsAppMessage } = require('./services/whatsapp');
-        const result = await sendWhatsAppMessage(input.phone, body, pdfBuffer, `Shift_Report_${report.id}.pdf`);
         
-        if (!result.success) throw new Error(result.error);
-        return { success: true };
+        return { success: true, queued: true };
       }),
 
-  getShiftReports: managerProcedure.query(async ({ ctx }) => {
-    return ctx.prisma.shiftReport.findMany({
-      include: { cashier: true },
-      orderBy: { date: 'desc' }
-    });
+  getShiftReports: managerProcedure
+    .input(z.object({
+      page: z.number().optional().default(1),
+      limit: z.number().optional().default(20)
+    }).optional())
+    .query(async ({ input, ctx }) => {
+      const page = input?.page || 1;
+      const limit = input?.limit || 20;
+      const skip = (page - 1) * limit;
+
+      const [data, total] = await Promise.all([
+        ctx.prisma.shiftReport.findMany({
+          include: { cashier: true },
+          orderBy: { date: 'desc' },
+          take: limit,
+          skip
+        }),
+        ctx.prisma.shiftReport.count()
+      ]);
+
+      return { data, total, page, totalPages: Math.ceil(total / limit) };
     }),
 
   getTodayShiftStats: protectedProcedure.query(async ({ ctx }) => {
@@ -1993,6 +2277,20 @@ export const appRouter = router({
               supplier: input.supplier
             }
           });
+          await tx.inventoryMovement.create({
+            data: {
+              inventoryItemId: input.inventoryItemId,
+              type: 'PURCHASE',
+              quantityChange: qty,
+              quantityBefore: existingItem ? existingItem.quantity : 0,
+              quantityAfter: existingItem ? existingItem.quantity + qty : qty,
+              unitCost: newUnitPrice,
+              totalCost: finalAmount,
+              relatedExpenseId: createdExp.id,
+              reason: 'شراء مواد: ' + createdExp.category,
+              createdBy: ctx.user?.name || 'النظام'
+            }
+          });
         }
         
         return createdExp;
@@ -2006,7 +2304,9 @@ export const appRouter = router({
     .input(z.object({
       filterType: z.string().optional(),
       startDate: z.string().optional(),
-      endDate: z.string().optional()
+      endDate: z.string().optional(),
+      page: z.number().optional().default(1),
+      limit: z.number().optional().default(20)
     }).optional())
     .query(async ({ input, ctx }) => {
       let dateFilter: any = undefined;
@@ -2033,11 +2333,24 @@ export const appRouter = router({
         dateFilter = { gte: start, lte: end };
       }
 
-      return ctx.prisma.expense.findMany({
-        where: dateFilter ? { date: dateFilter } : undefined,
-        include: { recordedBy: { select: { name: true } }, account: true },
-        orderBy: { date: 'desc' }
-      });
+      const page = input?.page || 1;
+      const limit = input?.limit || 20;
+      const skip = (page - 1) * limit;
+
+      const [data, total] = await Promise.all([
+        ctx.prisma.expense.findMany({
+          where: dateFilter ? { date: dateFilter } : undefined,
+          include: { recordedBy: { select: { name: true } }, account: true },
+          orderBy: { date: 'desc' },
+          take: limit,
+          skip
+        }),
+        ctx.prisma.expense.count({
+          where: dateFilter ? { date: dateFilter } : undefined
+        })
+      ]);
+
+      return { data, total, page, totalPages: Math.ceil(total / limit) };
     }),
 
   updateDetailedExpense: managerProcedure
@@ -2370,73 +2683,154 @@ export const appRouter = router({
       startDate: z.string().optional(),
       endDate: z.string().optional(),
       search: z.string().optional(),
-      limit: z.number().optional()
+      limit: z.number().optional().default(20),
+      page: z.number().optional().default(1)
     }).optional())
     .query(async ({ input, ctx }) => {
       let dateFilter: any = undefined;
       
-      if (input?.filterType && input.filterType !== 'all') {
-        const now = new Date();
-        const start = new Date();
+      const filterToUse = input?.filterType || 'today';
+      const now = new Date();
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      const end = new Date();
+      end.setHours(23, 59, 59, 999);
+      
+      if (filterToUse === 'today') {
+        // already set
+      } else if (filterToUse === 'weekly') {
+        start.setDate(now.getDate() - 7);
+      } else if (filterToUse === 'monthly') {
+        start.setMonth(now.getMonth() - 1);
+      } else if (filterToUse === 'custom' && input?.startDate && input?.endDate) {
+        start.setTime(new Date(input.startDate).getTime());
         start.setHours(0, 0, 0, 0);
-        const end = new Date();
+        end.setTime(new Date(input.endDate).getTime());
         end.setHours(23, 59, 59, 999);
-        
-        if (input.filterType === 'today') {
-          // already set to today
-        } else if (input.filterType === 'weekly') {
-          start.setDate(now.getDate() - 7);
-        } else if (input.filterType === 'monthly') {
-          start.setMonth(now.getMonth() - 1);
-        } else if (input.filterType === 'custom' && input.startDate && input.endDate) {
-          start.setTime(new Date(input.startDate).getTime());
-          start.setHours(0, 0, 0, 0);
-          end.setTime(new Date(input.endDate).getTime());
-          end.setHours(23, 59, 59, 999);
-        }
-        
+      } else if (filterToUse === 'all') {
+        // if all, maybe we don't need dateFilter. But we paginate anyway.
+        dateFilter = null;
+      }
+      
+      if (dateFilter === undefined) {
         dateFilter = { gte: start, lte: end };
       }
 
-      return ctx.prisma.auditLog.findMany({
-        where: {
-          ...(dateFilter ? { createdAt: dateFilter } : {}),
-          ...(input?.search ? { 
-            OR: [
-              { details: { contains: input.search } },
-              { action: { contains: input.search } },
-              { user: { name: { contains: input.search } } }
-            ]
-          } : {})
-        },
-        include: { user: { select: { name: true, role: true } } },
-        orderBy: { createdAt: 'desc' },
-        take: input?.limit ?? 200
-      });
+      const page = input?.page || 1;
+      const limit = input?.limit || 20;
+      const skip = (page - 1) * limit;
+
+      const whereObj = {
+        ...(dateFilter ? { createdAt: dateFilter } : {}),
+        ...(input?.search ? { 
+          OR: [
+            { details: { contains: input.search } },
+            { action: { contains: input.search } },
+            { user: { name: { contains: input.search } } }
+          ]
+        } : {})
+      };
+
+      const [data, total] = await Promise.all([
+        ctx.prisma.auditLog.findMany({
+          where: whereObj,
+          include: { user: { select: { name: true, role: true } } },
+          orderBy: { createdAt: 'desc' },
+          take: limit,
+          skip
+        }),
+        ctx.prisma.auditLog.count({ where: whereObj })
+      ]);
+
+      return { data, total, page, totalPages: Math.ceil(total / limit) };
     }),
 
 
-  getBackupLogs: adminProcedure.query(async () => {
-    // Return empty array or mock data since backups are filesystem-based
-    return [];
-  }),
+  getBackupLogs: adminProcedure
+    .input(z.object({
+      page: z.number().optional().default(1),
+      limit: z.number().optional().default(20)
+    }).optional())
+    .query(async ({ input }) => {
+      const fs = require('fs');
+      const path = require('path');
+      const backupDir = path.resolve(__dirname, '../backups');
+      
+      if (!fs.existsSync(backupDir)) {
+        return { data: [], total: 0, page: 1, totalPages: 1 };
+      }
+      
+      const files = fs.readdirSync(backupDir);
+      const logs = files
+        .filter((f: string) => f.endsWith('.db'))
+        .map((f: string) => {
+          const stats = fs.statSync(path.join(backupDir, f));
+          return {
+            id: f,
+            fileName: f,
+            createdAt: stats.mtime,
+            status: 'SUCCESS'
+          };
+        })
+        .sort((a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime());
+
+      const page = input?.page || 1;
+      const limit = input?.limit || 20;
+      const skip = (page - 1) * limit;
+
+      const paginatedLogs = logs.slice(skip, skip + limit);
+
+      return { 
+        data: paginatedLogs, 
+        total: logs.length, 
+        page, 
+        totalPages: Math.ceil(logs.length / limit) 
+      };
+    }),
 
   getDetailedSalesLog: staffProcedure
-    .input(z.object({ filterType: z.string().optional() }).optional())
+    .input(z.object({ 
+      filterType: z.string().optional(),
+      startDate: z.string().optional(),
+      endDate: z.string().optional(),
+      page: z.number().optional().default(1),
+      limit: z.number().optional().default(20)
+    }).optional())
     .query(async ({ input, ctx }) => {
       let dateFilter: any = undefined;
-      if (input?.filterType && input.filterType !== 'all') {
+      
+      if (input?.startDate && input?.endDate) {
+         dateFilter = { 
+           gte: new Date(input.startDate), 
+           lte: new Date(input.endDate) 
+         };
+      } else if (input?.filterType && input.filterType !== 'all') {
         const start = new Date();
         start.setHours(0, 0, 0, 0);
         if (input.filterType === 'weekly') start.setDate(start.getDate() - 7);
         if (input.filterType === 'monthly') start.setMonth(start.getMonth() - 1);
+        if (input.filterType === 'today') { /* already today */ }
         dateFilter = { gte: start };
       }
-      return ctx.prisma.order.findMany({
-        where: dateFilter ? { createdAt: dateFilter } : undefined,
-        include: { items: { include: { product: true } } },
-        orderBy: { createdAt: 'desc' }
-      });
+      
+      const page = input?.page || 1;
+      const limit = input?.limit || 20;
+      const skip = (page - 1) * limit;
+
+      const [data, total] = await Promise.all([
+        ctx.prisma.order.findMany({
+          where: dateFilter ? { createdAt: dateFilter } : undefined,
+          include: { items: { include: { product: true } } },
+          orderBy: { createdAt: 'desc' },
+          take: limit,
+          skip
+        }),
+        ctx.prisma.order.count({
+          where: dateFilter ? { createdAt: dateFilter } : undefined
+        })
+      ]);
+
+      return { data, total, page, totalPages: Math.ceil(total / limit) };
     }),
 
   getSalesAnalytics: staffProcedure
@@ -2565,21 +2959,43 @@ export const appRouter = router({
 
   // سجلات الواتساب
   getWhatsAppLogs: adminProcedure
-    .input(z.object({ status: z.string().optional(), limit: z.number().optional() }).optional())
+    .input(z.object({
+      status: z.string().optional(),
+      page: z.number().optional().default(1),
+      limit: z.number().optional().default(20)
+    }).optional())
     .query(async ({ input, ctx }) => {
-      return ctx.prisma.whatsAppLog.findMany({
-        where: input?.status ? { status: input.status } : undefined,
-        include: { user: { select: { name: true } } },
-        orderBy: { createdAt: 'desc' },
-        take: input?.limit || 100
-      });
+      const page = input?.page || 1;
+      const limit = input?.limit || 20;
+      const skip = (page - 1) * limit;
+
+      const where = input?.status && input.status !== 'ALL' ? { status: input.status } : undefined;
+
+      const [data, total] = await Promise.all([
+        ctx.prisma.whatsAppLog.findMany({
+          where,
+          include: { user: { select: { name: true } } },
+          orderBy: { createdAt: 'desc' },
+          take: limit,
+          skip
+        }),
+        ctx.prisma.whatsAppLog.count({ where })
+      ]);
+
+      return { data, total, page, totalPages: Math.ceil(total / limit) };
     }),
 
   // اختبار الإرسال
   testWhatsApp: adminProcedure
     .input(z.object({ phone: z.string(), message: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      await queueWhatsAppMessage(ctx.prisma, input.phone, 'TEST', input.message, ctx.user.id);
+      await queueWhatsAppMessage({
+        prisma: ctx.prisma,
+        recipient: input.phone,
+        messageType: 'TEST',
+        body: input.message,
+        userId: ctx.user.id
+      });
       return { queued: true, message: 'تم إضافة رسالة الاختبار للطابور' };
     }),
 
@@ -2589,9 +3005,76 @@ export const appRouter = router({
     .mutation(async ({ input, ctx }) => {
       return ctx.prisma.whatsAppLog.update({
         where: { id: input.id },
-        data: { status: 'PENDING', attempts: 0, errorMessage: null }
+        data: { status: 'PENDING', attempts: 0, errorMessage: null, lastAttemptAt: null }
       });
     }),
+
+  // Performance Monitor
+  getPerformanceSummary: adminProcedure.query(async ({ ctx }) => {
+    // Audit Log counts
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay());
+
+    const [
+      auditToday,
+      auditWeek,
+      ordersCount,
+      productsCount,
+      expensesCount,
+      usersCount,
+      investorsCount,
+      shiftReportsCount,
+      backupsCount,
+      whatsappPending,
+      whatsappSent,
+      whatsappFailed,
+      backupLog
+    ] = await Promise.all([
+      ctx.prisma.auditLog.count({ where: { createdAt: { gte: today } } }),
+      ctx.prisma.auditLog.count({ where: { createdAt: { gte: startOfWeek } } }),
+      ctx.prisma.order.count(),
+      ctx.prisma.product.count(),
+      ctx.prisma.expense.count(),
+      ctx.prisma.user.count(),
+      ctx.prisma.investor.count(),
+      ctx.prisma.shiftReport.count(),
+      ctx.prisma.backupLog.count(),
+      ctx.prisma.whatsAppLog.count({ where: { status: 'PENDING' } }),
+      ctx.prisma.whatsAppLog.count({ where: { status: 'SENT' } }),
+      ctx.prisma.whatsAppLog.count({ where: { status: 'FAILED' } }),
+      ctx.prisma.backupLog.findFirst({ orderBy: { createdAt: 'desc' } })
+    ]);
+
+    const { status: waStatus } = await getWhatsAppState();
+
+    return {
+      metrics: performanceMetrics,
+      errors: errorLogs,
+      counts: {
+        orders: ordersCount,
+        products: productsCount,
+        expenses: expensesCount,
+        users: usersCount,
+        investors: investorsCount,
+        shiftReports: shiftReportsCount,
+        backups: backupsCount,
+        auditToday,
+        auditWeek
+      },
+      whatsapp: {
+        status: waStatus,
+        pending: whatsappPending,
+        sent: whatsappSent,
+        failed: whatsappFailed,
+        lastWorkerRun: lastWorkerRunTime,
+        isWorkerRunning: isProcessingQueue
+      },
+      backup: backupLog || null
+    };
+  }),
 
   // توليد PDF لتقرير الشفت
   generateShiftReportPDF: adminProcedure
@@ -2605,6 +3088,108 @@ export const appRouter = router({
       const pdfBuffer = await generateShiftReportPDF(report);
       const base64 = pdfBuffer.toString('base64');
       return { base64, filename: `shift-report-${report.id}.pdf` };
+    }),
+
+  // --- Daily Tasks (المهام اليومية) ---
+  getTaskTemplates: managerProcedure.query(async ({ ctx }) => {
+    return ctx.prisma.dailyTaskTemplate.findMany({ orderBy: { createdAt: 'desc' } });
+  }),
+
+  createTaskTemplate: managerProcedure
+    .input(z.object({
+      title: z.string(),
+      role: z.string(),
+      description: z.string().optional()
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const task = await ctx.prisma.dailyTaskTemplate.create({ data: { title: input.title, role: input.role, description: input.description } });
+      await logAudit(ctx.prisma, ctx.user.id, 'ADD_TASK_TEMPLATE', `إضافة مهمة يومية (${task.title}) لدور ${task.role}`);
+      return task;
+    }),
+
+  toggleTaskTemplateActive: managerProcedure
+    .input(z.object({ id: z.string(), isActive: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      return ctx.prisma.dailyTaskTemplate.update({
+        where: { id: input.id },
+        data: { isActive: input.isActive }
+      });
+    }),
+
+  deleteTaskTemplate: managerProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      return ctx.prisma.dailyTaskTemplate.delete({ where: { id: input.id } });
+    }),
+
+  getMyDailyTasks: protectedProcedure.query(async ({ ctx }) => {
+    // 1. Get templates for my role
+    const templates = await ctx.prisma.dailyTaskTemplate.findMany({
+      where: { role: ctx.user.role, isActive: true },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    // 2. Get today's completions
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const completions = await ctx.prisma.dailyTaskCompletion.findMany({
+      where: {
+        employeeId: ctx.user.id,
+        date: { gte: today }
+      }
+    });
+
+    // 3. Merge
+    return templates.map(t => {
+      const completion = completions.find(c => c.taskTemplateId === t.id);
+      return {
+        template: t,
+        completion: completion || null
+      };
+    });
+  }),
+
+  toggleDailyTaskCompletion: protectedProcedure
+    .input(z.object({
+      taskTemplateId: z.string(),
+      isCompleted: z.boolean(),
+      notes: z.string().optional()
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Find if exists for today
+      let completion = await ctx.prisma.dailyTaskCompletion.findFirst({
+        where: {
+          taskTemplateId: input.taskTemplateId,
+          employeeId: ctx.user.id,
+          date: { gte: today }
+        }
+      });
+
+      if (completion) {
+        return ctx.prisma.dailyTaskCompletion.update({
+          where: { id: completion.id },
+          data: {
+            isCompleted: input.isCompleted,
+            completedAt: input.isCompleted ? new Date() : null,
+            notes: input.notes
+          }
+        });
+      } else {
+        return ctx.prisma.dailyTaskCompletion.create({
+          data: {
+            taskTemplateId: input.taskTemplateId,
+            employeeId: ctx.user.id,
+            date: new Date(),
+            isCompleted: input.isCompleted,
+            completedAt: input.isCompleted ? new Date() : null,
+            notes: input.notes
+          }
+        });
+      }
     }),
 
 });

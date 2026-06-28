@@ -28,7 +28,45 @@ export const createContext = ({ req, res }: any) => {
 const t = initTRPC.context<ReturnType<typeof createContext>>().create();
 
 export const router = t.router;
-export const publicProcedure = t.procedure;
+
+export const performanceMetrics: Record<string, { totalTime: number; count: number; avgTime: number }> = {};
+export const errorLogs: Array<{ time: Date; operation: string; message: string }> = [];
+
+const timingMiddleware = t.middleware(async ({ path, type, next }) => {
+  const start = Date.now();
+  try {
+    const result = await next();
+    const duration = Date.now() - start;
+    
+    if (!performanceMetrics[path]) {
+      performanceMetrics[path] = { totalTime: 0, count: 0, avgTime: 0 };
+    }
+    performanceMetrics[path].totalTime += duration;
+    performanceMetrics[path].count++;
+    performanceMetrics[path].avgTime = performanceMetrics[path].totalTime / performanceMetrics[path].count;
+    
+    return result;
+  } catch (err: any) {
+    const duration = Date.now() - start;
+    if (!performanceMetrics[path]) {
+      performanceMetrics[path] = { totalTime: 0, count: 0, avgTime: 0 };
+    }
+    performanceMetrics[path].totalTime += duration;
+    performanceMetrics[path].count++;
+    performanceMetrics[path].avgTime = performanceMetrics[path].totalTime / performanceMetrics[path].count;
+
+    errorLogs.unshift({
+      time: new Date(),
+      operation: path,
+      message: err.message || 'Unknown error'
+    });
+    if (errorLogs.length > 10) errorLogs.pop();
+
+    throw err;
+  }
+});
+
+export const publicProcedure = t.procedure.use(timingMiddleware);
 
 const isAuthed = t.middleware(({ next, ctx }) => {
   if (!ctx.user) {
@@ -41,7 +79,7 @@ const isAuthed = t.middleware(({ next, ctx }) => {
   });
 });
 
-export const protectedProcedure = t.procedure.use(isAuthed);
+export const protectedProcedure = publicProcedure.use(isAuthed);
 
 export const requireRoles = (roles: string[]) => {
   return t.middleware(({ next, ctx }) => {
@@ -59,9 +97,9 @@ export const requireRoles = (roles: string[]) => {
   });
 };
 
-export const adminProcedure = t.procedure.use(isAuthed).use(requireRoles(['ADMIN']));
-export const managerProcedure = t.procedure.use(isAuthed).use(requireRoles(['ADMIN', 'MANAGER']));
-export const cashierProcedure = t.procedure.use(isAuthed).use(requireRoles(['ADMIN', 'MANAGER', 'CASHIER', 'STAFF', 'INVESTOR_STAFF']));
-export const kitchenProcedure = t.procedure.use(isAuthed).use(requireRoles(['ADMIN', 'MANAGER', 'KITCHEN', 'STAFF', 'INVESTOR_STAFF', 'CASHIER']));
-export const staffProcedure = t.procedure.use(isAuthed).use(requireRoles(['ADMIN', 'MANAGER', 'STAFF', 'CASHIER', 'KITCHEN', 'INVESTOR_STAFF']));
-export const investorProcedure = t.procedure.use(isAuthed).use(requireRoles(['ADMIN', 'MANAGER', 'INVESTOR', 'INVESTOR_STAFF']));
+export const adminProcedure = publicProcedure.use(isAuthed).use(requireRoles(['ADMIN']));
+export const managerProcedure = publicProcedure.use(isAuthed).use(requireRoles(['ADMIN', 'MANAGER']));
+export const cashierProcedure = publicProcedure.use(isAuthed).use(requireRoles(['ADMIN', 'MANAGER', 'CASHIER', 'STAFF', 'INVESTOR_STAFF']));
+export const kitchenProcedure = publicProcedure.use(isAuthed).use(requireRoles(['ADMIN', 'MANAGER', 'KITCHEN', 'STAFF', 'INVESTOR_STAFF', 'CASHIER']));
+export const staffProcedure = publicProcedure.use(isAuthed).use(requireRoles(['ADMIN', 'MANAGER', 'STAFF', 'CASHIER', 'KITCHEN', 'INVESTOR_STAFF']));
+export const investorProcedure = publicProcedure.use(isAuthed).use(requireRoles(['ADMIN', 'MANAGER', 'INVESTOR', 'INVESTOR_STAFF']));

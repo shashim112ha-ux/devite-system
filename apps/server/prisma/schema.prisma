@@ -24,7 +24,7 @@ model Offer {
   imageUrl    String?
   price       Float
   oldPrice    Float?
-  discount    Int?     
+  discount    Int?
   startDate   DateTime @default(now())
   endDate     DateTime
   type        String   @default("DISCOUNT") // DISCOUNT, COMBO, BOGO
@@ -32,37 +32,37 @@ model Offer {
 }
 
 model User {
-  id             String   @id @default(cuid())
+  id             String  @id @default(cuid())
   name           String
-  phone          String   @unique
-  email          String?  @unique
+  phone          String  @unique
+  email          String? @unique
   password       String
-  role           String   @default("CASHIER") // ADMIN, MANAGER, CASHIER, KITCHEN, STAFF, INVESTOR
+  role           String  @default("CASHIER") // ADMIN, MANAGER, CASHIER, KITCHEN, STAFF, INVESTOR
   jobDescription String?
   imageUrl       String?
-  
-  salary         Float  @default(0)
-  hourlyRate     Float  @default(0)
-  shiftType      String?  
+
+  salary         Float    @default(0)
+  hourlyRate     Float    @default(0)
+  shiftType      String?
   employmentDate DateTime @default(now())
   active         Boolean  @default(true)
-  
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
 
-  orders           Order[]            @relation("CashierOrders")
-  attendance       Attendance[]       @relation("UserAttendance")
-  editedAttendances Attendance[]      @relation("EditedAttendance")
-  auditLogs        AuditLog[]
-  payrolls         Payroll[]
-  feedbacks        EmployeeFeedback[]
-  recordedExpenses Expense[]
-  shiftReports     ShiftReport[]
-  shiftSchedules   ShiftSchedule[]
-  whatsappLogs     WhatsAppLog[]
-  
-  branchId         String?
-  branch           BranchLocation? @relation(fields: [branchId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders            Order[]            @relation("CashierOrders")
+  attendance        Attendance[]       @relation("UserAttendance")
+  editedAttendances Attendance[]       @relation("EditedAttendance")
+  auditLogs         AuditLog[]
+  payrolls          Payroll[]
+  feedbacks         EmployeeFeedback[]
+  recordedExpenses  Expense[]
+  shiftReports      ShiftReport[]
+  shiftSchedules    ShiftSchedule[]
+  whatsappLogs      WhatsAppLog[]
+
+  branchId String?
+  branch   BranchLocation? @relation(fields: [branchId], references: [id])
 }
 
 model Category {
@@ -73,47 +73,47 @@ model Category {
 }
 
 model Product {
-  id               String   @id @default(cuid())
-  name             String
-  description      String?
-  price            Float
-  cost             Float
-  prepTime         Int      @default(5)
-  image            String?
-  available        Boolean  @default(true)
+  id                String   @id @default(cuid())
+  name              String
+  description       String?
+  price             Float
+  cost              Float
+  prepTime          Int      @default(5)
+  image             String?
+  available         Boolean  @default(true)
   unavailableReason String?
-  isHidden         Boolean  @default(false)
-  categoryId       String
-  category         Category @relation(fields: [categoryId], references: [id])
+  isHidden          Boolean  @default(false)
+  categoryId        String
+  category          Category @relation(fields: [categoryId], references: [id])
 
-  sizes            String[] @default([])
-  sugarLevels      String[] @default([])
-  iceLevels        String[] @default([])
+  sizes       String[] @default([])
+  sugarLevels String[] @default([])
+  iceLevels   String[] @default([])
 
-  orderItems       OrderItem[]
-  ingredients      ProductIngredient[]
-  variants         ProductVariant[]
+  orderItems  OrderItem[]
+  ingredients ProductIngredient[]
+  variants    ProductVariant[]
 
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model ProductVariant {
-  id              String   @id @default(cuid())
-  productId       String
-  product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  sizeName        String   // small, medium, large
-  price           Float
-  manualCost      Float    @default(0)
-  autoCost        Float    @default(0)
-  prepTime        Int      @default(5)
-  isAvailable     Boolean  @default(true)
-  
-  ingredients     ProductVariantIngredient[]
+  id          String  @id @default(cuid())
+  productId   String
+  product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sizeName    String // small, medium, large
+  price       Float
+  manualCost  Float   @default(0)
+  autoCost    Float   @default(0)
+  prepTime    Int     @default(5)
+  isAvailable Boolean @default(true)
+
+  ingredients ProductVariantIngredient[]
 }
 
 model ProductVariantIngredient {
-  id              String   @id @default(cuid())
+  id              String         @id @default(cuid())
   variantId       String
   variant         ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
   inventoryItemId String
@@ -122,27 +122,33 @@ model ProductVariantIngredient {
 }
 
 model InventoryItem {
-  id           String   @id @default(cuid())
-  name         String   @unique
+  id           String    @id @default(cuid())
+  name         String    @unique
   quantity     Float
-  unit         String   
-  minThreshold Float    @default(5)
+  homeQuantity Float     @default(0)
+  storageQuantity Float  @default(0)
+  unit         String
+  minThreshold Float     @default(5)
   unitPrice    Float
   expiryDate   DateTime?
   supplier     String?
-  category     String?  
-  
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  category     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   productIngredients ProductIngredient[]
   variantIngredients ProductVariantIngredient[]
   purchaseRecords    PurchaseRecord[]
   expenses           Expense[]
   auditLogs          InventoryAuditLog[]
-  
-  branchId         String?
-  branch           BranchLocation? @relation(fields: [branchId], references: [id])
+
+  branchId String?
+  branch   BranchLocation? @relation(fields: [branchId], references: [id])
+
+  @@index([name])
+  @@index([quantity])
+  @@index([expiryDate])
 }
 
 model InventoryAuditLog {
@@ -179,36 +185,39 @@ model ProductIngredient {
 }
 
 model Order {
-  id            String        @id @default(cuid())
-  orderNumber   Int           @unique
+  id            String  @id @default(cuid())
+  orderNumber   Int     @unique
   total         Float
-  paymentMethod String        @default("CASH") // CASH, CARD, ONLINE
-  status        String        @default("NEW")  // NEW, PREPARING, READY, DELIVERED, CANCELLED
+  paymentMethod String  @default("CASH") // CASH, CARD, ONLINE
+  status        String  @default("NEW") // NEW, PREPARING, READY, DELIVERED, CANCELLED
   notes         String?
-  estimatedTime Int           @default(15)
-  isUrgent      Boolean       @default(false)
-  isVIP         Boolean       @default(false)
-  
+  estimatedTime Int     @default(15)
+  isUrgent      Boolean @default(false)
+  isVIP         Boolean @default(false)
+
   customerId    String?
-  customer      Customer?     @relation(fields: [customerId], references: [id])
-  customerPhone String?       // رقم هاتف العميل (اختياري)
-  
-  cashierId     String?
-  cashier       User?         @relation("CashierOrders", fields: [cashierId], references: [id])
-  
-  items         OrderItem[]
-  timeline      OrderTimelineStep[]
-  whatsappStatus String?     // SENT, FAILED, PENDING
-  profit        Float         @default(0) // ADDED: to track exact profit per order
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  
-  branchId      String?
-  branch        BranchLocation? @relation(fields: [branchId], references: [id])
+  customer      Customer? @relation(fields: [customerId], references: [id])
+  customerPhone String? // رقم هاتف العميل (اختياري)
+
+  cashierId String?
+  cashier   User?   @relation("CashierOrders", fields: [cashierId], references: [id])
+
+  items          OrderItem[]
+  timeline       OrderTimelineStep[]
+  whatsappStatus String? // SENT, FAILED, PENDING
+  profit         Float               @default(0) // ADDED: to track exact profit per order
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  branchId String?
+  branch   BranchLocation? @relation(fields: [branchId], references: [id])
 
   @@index([status])
   @@index([createdAt])
   @@index([isUrgent])
+  @@index([paymentMethod])
+  @@index([customerPhone])
+  @@index([cashierId])
 }
 
 model OrderItem {
@@ -218,13 +227,17 @@ model OrderItem {
   variantId String?
   quantity  Int
   price     Float
-  size      String? 
-  sugar     String? 
-  ice       String? 
+  size      String?
+  sugar     String?
+  ice       String?
   addons    String?
   notes     String?
   order     Order   @relation(fields: [orderId], references: [id])
   product   Product @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+  @@index([variantId])
 }
 
 model Attendance {
@@ -232,11 +245,17 @@ model Attendance {
   userId     String
   checkIn    DateTime  @default(now())
   checkOut   DateTime?
-  reason     String?   // Reason for manual edit
-  editedById String?   // Admin who manually edited
-  
-  user       User      @relation("UserAttendance", fields: [userId], references: [id])
-  editedBy   User?     @relation("EditedAttendance", fields: [editedById], references: [id])
+  autoCheckout Boolean @default(false)
+  checkoutSource String?
+  reason     String? // Reason for manual edit
+  editedById String? // Admin who manually edited
+
+  user     User  @relation("UserAttendance", fields: [userId], references: [id])
+  editedBy User? @relation("EditedAttendance", fields: [editedById], references: [id])
+
+  @@index([userId])
+  @@index([checkIn])
+  @@index([checkOut])
 }
 
 model Investor {
@@ -254,72 +273,80 @@ model Investor {
 }
 
 model Expense {
-  id              String   @id @default(cuid())
-  category        String   
-  amount          Float
-  description     String?
-  date            DateTime @default(now())
-  supplier        String?
-  receiptUrl      String?
-  
-  purpose         String?
-  quantity        Float    @default(1)
-  unitPrice       Float    @default(0)
-  paymentMethod   String   @default("CASH")
-  
+  id          String   @id @default(cuid())
+  category    String
+  amount      Float
+  description String?
+  date        DateTime @default(now())
+  supplier    String?
+  receiptUrl  String?
+
+  purpose       String?
+  quantity      Float   @default(1)
+  unitPrice     Float   @default(0)
+  paymentMethod String  @default("CASH")
+
   accountPaidFrom String?
-  accountId       String?  // Reference to Account model
+  accountId       String? // Reference to Account model
   account         Account? @relation(fields: [accountId], references: [id])
-  
-  inventoryItemId String?  // Reference to Inventory for automatic stock increase
+
+  inventoryItemId String? // Reference to Inventory for automatic stock increase
   inventoryItem   InventoryItem? @relation(fields: [inventoryItemId], references: [id])
-  
-  recordedById    String?
-  recordedBy      User?    @relation(fields: [recordedById], references: [id])
-  
-  branchId        String?
-  branch          BranchLocation? @relation(fields: [branchId], references: [id])
+
+  recordedById String?
+  recordedBy   User?   @relation(fields: [recordedById], references: [id])
+
+  branchId String?
+  branch   BranchLocation? @relation(fields: [branchId], references: [id])
 
   @@index([date])
   @@index([category])
+  @@index([accountId])
+  @@index([recordedById])
+  @@index([supplier])
 }
 
 model Notification {
   id        String   @id @default(cuid())
-  type      String   
+  type      String
   message   String
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
 }
 
 model AuditLog {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  action    String
-  details   String?
-  entityId  String?
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  action     String
+  details    String?
+  entityId   String?
   entityType String?
-  oldValues String?
-  newValues String?
-  page      String?
-  createdAt DateTime @default(now())
+  oldValues  String?
+  newValues  String?
+  page       String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userId])
+  @@index([action])
+  @@index([entityType])
 }
 
 model SystemSetting {
-  id              String @id @default(cuid())
-  storeName       String @default("Devite ERP")
-  currency        String @default("د.ب")
-  taxRate         Float  @default(10.0)
-  defaultPrepTime Int    @default(15)
+  id              String  @id @default(cuid())
+  storeName       String  @default("Devite ERP")
+  currency        String  @default("د.ب")
+  taxRate         Float   @default(10.0)
+  defaultPrepTime Int     @default(15)
   logoUrl         String?
-  
+
   whatsappEnabled  Boolean @default(false)
   whatsappPhone    String?
   whatsappOrderMsg String? @default("مرحباً بك! طلبك رقم {{orderNumber}} جاري تحضيره الآن. الإجمالي: {{total}}")
   whatsappReadyMsg String? @default("مرحباً! طلبك رقم {{orderNumber}} جاهز للاستلام. نتمنى لك يوماً سعيداً!")
   whatsappShiftMsg String? @default("تقرير الشفت: المبيعات {{income}}، المصروفات {{expenses}}، الصافي {{net}}.")
-  
+
   clockOutInstructions String? @default("حافظ على نظافة العربة\nادخل جميع الاجهزة من الخارج\nتأكد من اغلاق جميع الليتات الخارجية")
 }
 
@@ -359,6 +386,11 @@ model Payroll {
   lastEditedAt     DateTime?
   editReason       String?
   createdAt        DateTime  @default(now())
+
+  @@index([userId])
+  @@index([startDate])
+  @@index([endDate])
+  @@index([status])
 }
 
 model ProfitDistribution {
@@ -391,107 +423,111 @@ model InvestorPayout {
 }
 
 model ShiftReport {
-  id                    String   @id @default(cuid())
-  date                  DateTime @default(now())
-  cashierId             String
-  cashier               User     @relation(fields: [cashierId], references: [id])
-  dailyIncome           Float    @default(0)
-  profit                Float    @default(0)
-  expenses              Float    @default(0)
-  losses                Float    @default(0)
-  netProfit             Float    @default(0)
-  operatingCost         Float    @default(0)
-  cashAmount            Float    @default(0)
-  cardAmount            Float    @default(0)
-  difference            Float    @default(0)
-  mostConsumedMaterial  String?
-  notes                 String?
+  id                   String   @id @default(cuid())
+  date                 DateTime @default(now())
+  cashierId            String
+  cashier              User     @relation(fields: [cashierId], references: [id])
+  dailyIncome          Float    @default(0)
+  profit               Float    @default(0)
+  expenses             Float    @default(0)
+  losses               Float    @default(0)
+  netProfit            Float    @default(0)
+  operatingCost        Float    @default(0)
+  cashAmount           Float    @default(0)
+  cardAmount           Float    @default(0)
+  difference           Float    @default(0)
+  mostConsumedMaterial String?
+  notes                String?
 
-  status                String   @default("PENDING") // PENDING, APPROVED, REJECTED
-  approvedBy            String?
-  managerNotes          String?
-  
+  status       String  @default("PENDING") // PENDING, APPROVED, REJECTED
+  approvedBy   String?
+  managerNotes String?
+
   // Checklist fields
-  cleanlinessInternal   Boolean  @default(true)
-  cleanlinessExternal   Boolean  @default(true)
-  waterInternal         Float    @default(0)
-  waterExternal         Float    @default(0)
-  petrolQuantity        Float    @default(0)
-  gasQuantity           Float    @default(0)
-  electricityStatus     Boolean  @default(true)
-  fridgeStatus          Boolean  @default(true)
-  blenderStatus         Boolean  @default(true)
-  iceMachineStatus      Boolean  @default(true)
-  cupsQuantity          Int      @default(0)
-  lidsQuantity          Int      @default(0)
-  napkinsQuantity       Int      @default(0)
-  glovesQuantity        Int      @default(0)
-  masksQuantity         Int      @default(0)
-  bagsQuantity          Int      @default(0)
-  cleaningToolsStatus   Boolean  @default(true)
-  
+  cleanlinessInternal Boolean @default(true)
+  cleanlinessExternal Boolean @default(true)
+  waterInternal       Float   @default(0)
+  waterExternal       Float   @default(0)
+  petrolQuantity      Float   @default(0)
+  gasQuantity         Float   @default(0)
+  electricityStatus   Boolean @default(true)
+  fridgeStatus        Boolean @default(true)
+  blenderStatus       Boolean @default(true)
+  iceMachineStatus    Boolean @default(true)
+  cupsQuantity        Int     @default(0)
+  lidsQuantity        Int     @default(0)
+  napkinsQuantity     Int     @default(0)
+  glovesQuantity      Int     @default(0)
+  masksQuantity       Int     @default(0)
+  bagsQuantity        Int     @default(0)
+  cleaningToolsStatus Boolean @default(true)
+
   // Attendance listing
-  presentStaff          String   @default("[]") // JSON
-  absentStaff           String   @default("[]") // JSON
-  lateStaff             String   @default("[]") // JSON
-  
+  presentStaff String @default("[]") // JSON
+  absentStaff  String @default("[]") // JSON
+  lateStaff    String @default("[]") // JSON
+
   // Orders stats listing
-  ordersCount           Int      @default(0)
-  avgPrepTime           Float    @default(0)
-  fastestOrderTime      Float    @default(0)
-  slowestOrderTime      Float    @default(0)
-  delayedOrdersCount    Int      @default(0)
-  cancelledOrdersCount  Int      @default(0)
-  
-  branchId              String?
-  branch                BranchLocation? @relation(fields: [branchId], references: [id])
+  ordersCount          Int   @default(0)
+  avgPrepTime          Float @default(0)
+  fastestOrderTime     Float @default(0)
+  slowestOrderTime     Float @default(0)
+  delayedOrdersCount   Int   @default(0)
+  cancelledOrdersCount Int   @default(0)
+
+  branchId String?
+  branch   BranchLocation? @relation(fields: [branchId], references: [id])
+
+  @@index([date])
+  @@index([status])
+  @@index([cashierId])
 }
 
 model EmployeeFeedback {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  type        String   // positive, negative, issue, suggestion, customer_note, kitchen_note, tool_note
-  message     String
-  status      String   @default("NEW") // NEW, VIEWED, RESOLVED
-  adminReply  String?
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  type       String // positive, negative, issue, suggestion, customer_note, kitchen_note, tool_note
+  message    String
+  status     String   @default("NEW") // NEW, VIEWED, RESOLVED
+  adminReply String?
+  createdAt  DateTime @default(now())
 }
 
 model Account {
-  id          String    @id @default(cuid())
-  name        String
-  type        String    @default("CASH") // CASH, ONLINE, CARD, BENEFIT, BANK
-  balance     Float     @default(0)
-  notes       String?
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  
-  expenses    Expense[]
-  
-  branchId    String?
-  branch      BranchLocation? @relation(fields: [branchId], references: [id])
+  id        String   @id @default(cuid())
+  name      String
+  type      String   @default("CASH") // CASH, ONLINE, CARD, BENEFIT, BANK
+  balance   Float    @default(0)
+  notes     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  expenses Expense[]
+
+  branchId String?
+  branch   BranchLocation? @relation(fields: [branchId], references: [id])
 }
 
 model BranchLocation {
-  id            String    @id @default(cuid())
-  country       String    @default("مملكة البحرين")
+  id            String   @id @default(cuid())
+  country       String   @default("مملكة البحرين")
   governorate   String?
   branchName    String
   address       String?
   googleMapsUrl String?
   branchNumber  String?
-  isActive      Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  users         User[]
-  orders        Order[]
-  expenses      Expense[]
-  inventory     InventoryItem[]
-  shiftReports  ShiftReport[]
-  accounts      Account[]
+  users        User[]
+  orders       Order[]
+  expenses     Expense[]
+  inventory    InventoryItem[]
+  shiftReports ShiftReport[]
+  accounts     Account[]
 }
 
 // نموذج الملاحظات العام - للزبائن والمستثمرين والموظفين بدون تسجيل دخول
@@ -500,7 +536,7 @@ model Feedback {
   senderName  String?
   senderPhone String?
   senderRole  String   @default("CUSTOMER") // CUSTOMER, INVESTOR, EMPLOYEE, ANONYMOUS
-  type        String   // شكوى، مقترح، تطوير، إطراء، استفسار
+  type        String // شكوى، مقترح، تطوير، إطراء، استفسار
   content     String
   isRead      Boolean  @default(false)
   adminReply  String?
@@ -508,21 +544,21 @@ model Feedback {
 }
 
 model ShiftSchedule {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  date        DateTime // تاريخ المناوبة
-  shiftName   String   // اسم المناوبة (أولى، ثانية، الخ)
-  startTime   DateTime
-  endTime     DateTime
-  role        String   // كاشير / مطبخ / محاسب / مدير / توصيل
-  status      String   @default("PENDING") // PENDING, APPROVED, REJECTED
-  createdBy   String?  // من قام بإنشاء أو طلب المناوبة
-  notes       String?
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  date      DateTime // تاريخ المناوبة
+  shiftName String // اسم المناوبة (أولى، ثانية، الخ)
+  startTime DateTime
+  endTime   DateTime
+  role      String // كاشير / مطبخ / محاسب / مدير / توصيل
+  status    String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  createdBy String? // من قام بإنشاء أو طلب المناوبة
+  notes     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // =====================================
@@ -530,32 +566,32 @@ model ShiftSchedule {
 // =====================================
 
 model WhatsAppSettings {
-  id                        String  @id @default("default")
-  isEnabled                 Boolean @default(false)
-  officialNumber            String?
-  accessToken               String?
-  phoneNumberId             String?
-  managerNumbers            String? // أرقام المدراء مفصولة بفاصلة
-  supervisorNumbers         String? // أرقام المشرفين
-  investorNumbers           String? // أرقام المستثمرين
-  headManagerNumber         String? // رقم المدير الرئيسي
+  id                String  @id @default("default")
+  isEnabled         Boolean @default(false)
+  officialNumber    String?
+  accessToken       String?
+  phoneNumberId     String?
+  managerNumbers    String? // أرقام المدراء مفصولة بفاصلة
+  supervisorNumbers String? // أرقام المشرفين
+  investorNumbers   String? // أرقام المستثمرين
+  headManagerNumber String? // رقم المدير الرئيسي
 
   // مفاتيح تفعيل كل نوع رسالة
-  notifyOrderCreated        Boolean @default(true)
-  notifyOrderReady          Boolean @default(true)
-  notifyOrderCancelled      Boolean @default(true)
-  notifyShiftReport         Boolean @default(true)
-  notifyDailyReport         Boolean @default(false)
-  notifyLowInventory        Boolean @default(true)
-  notifyLargeExpense        Boolean @default(true)
-  notifyInvestorReport      Boolean @default(false)
+  notifyOrderCreated   Boolean @default(true)
+  notifyOrderReady     Boolean @default(true)
+  notifyOrderCancelled Boolean @default(true)
+  notifyShiftReport    Boolean @default(true)
+  notifyDailyReport    Boolean @default(false)
+  notifyLowInventory   Boolean @default(true)
+  notifyLargeExpense   Boolean @default(true)
+  notifyInvestorReport Boolean @default(false)
 
   // إعدادات التنبيهات
-  largeExpenseThreshold     Float   @default(20.0)
-  lowInventoryRepeatDaily   Boolean @default(false) // تكرار تنبيه المخزون يومياً
+  largeExpenseThreshold   Float   @default(20.0)
+  lowInventoryRepeatDaily Boolean @default(false) // تكرار تنبيه المخزون يومياً
 
-  createdAt                 DateTime @default(now())
-  updatedAt                 DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model WhatsAppTemplate {
@@ -563,30 +599,141 @@ model WhatsAppTemplate {
   type      String   @unique // ORDER_CREATED, ORDER_READY, ORDER_CANCELLED, SHIFT_REPORT, DAILY_REPORT, LOW_INVENTORY, LARGE_EXPENSE, INVESTOR_REPORT
   name      String
   body      String
-  variables String   // المتغيرات المتاحة مثل {customerName},{orderNumber}
+  variables String // المتغيرات المتاحة مثل {customerName},{orderNumber}
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model WhatsAppLog {
-  id           String    @id @default(cuid())
-  recipient    String    // رقم المستلم
-  messageType  String    // ORDER_CREATED, SHIFT_REPORT, الخ
-  body         String    // نص الرسالة المرسلة
-  status       String    @default("PENDING") // PENDING, SENT, FAILED
-  errorMessage String?
-  attempts     Int       @default(0)
-  sentAt       DateTime?
-  createdAt    DateTime  @default(now())
+  id                String    @id @default(cuid())
+  recipient         String // رقم المستلم
+  messageType       String // ORDER_CREATED, SHIFT_REPORT, الخ
+  body              String // نص الرسالة المرسلة
+  templateKey       String?
+  payload           String? // JSON string
+  status            String    @default("PENDING") // PENDING, SENT, FAILED
+  errorMessage      String?
+  attempts          Int       @default(0)
+  maxAttempts       Int       @default(3)
+  sentAt            DateTime?
+  lastAttemptAt     DateTime?
+  relatedEntityType String?
+  relatedEntityId   String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @default(now()) @updatedAt
 
-  userId       String?
-  user         User?     @relation(fields: [userId], references: [id])
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  @@index([createdAt])
+  @@index([status])
+  @@index([messageType])
+  @@index([recipient])
 }
 
 model BackupLog {
   id        String   @id @default(cuid())
   fileName  String
-  status    String   // SUCCESS, FAILED
+  status    String // SUCCESS, FAILED
   createdBy String?
   createdAt DateTime @default(now())
+}
+
+model DailyFinancialSummary {
+  id   String   @id @default(cuid())
+  date DateTime @unique
+
+  totalSales    Float @default(0)
+  totalExpenses Float @default(0)
+  totalProfit   Float @default(0)
+  netProfit     Float @default(0)
+
+  cashSales    Float @default(0)
+  cardSales    Float @default(0)
+  benefitSales Float @default(0)
+  onlineSales  Float @default(0)
+
+  orderCount          Int @default(0)
+  cancelledOrderCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+}
+
+model ErrorLog {
+  id           String   @id @default(cuid())
+  userId       String?
+  route        String?
+  errorMessage String
+  stack        String?
+  severity     String   @default("ERROR")
+  metadata     String?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([severity])
+}
+
+model InventoryMovement {
+  id              String   @id @default(cuid())
+  inventoryItemId String
+  type            String   // PURCHASE, MANUAL_ADJUSTMENT, TRANSFER_TO_TRUCK, TRANSFER_TO_HOME, TRANSFER_TO_STORAGE, DAMAGED, ORDER_DEDUCTION, OVERRIDE
+  quantityChange  Float
+  quantityBefore  Float?
+  quantityAfter   Float?
+  unitCost        Float?
+  totalCost       Float?
+  fromLocation    String?
+  toLocation      String?
+  relatedOrderId  String?
+  relatedExpenseId String?
+  reason          String?
+  createdBy       String?
+  createdAt       DateTime @default(now())
+
+  @@index([inventoryItemId])
+  @@index([createdAt])
+  @@index([type])
+}
+
+model InventoryOverrideLog {
+  id               String   @id @default(cuid())
+  orderId          String?
+  productId        String?
+  variantId        String?
+  missingItemsJson String?
+  approvedBy       String?
+  reason           String?
+  createdAt        DateTime @default(now())
+
+  @@index([orderId])
+  @@index([createdAt])
+}
+
+model DailyTaskTemplate {
+  id          String   @id @default(cuid())
+  role        String
+  title       String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([role])
+}
+
+model DailyTaskCompletion {
+  id             String   @id @default(cuid())
+  taskTemplateId String
+  employeeId     String
+  date           DateTime
+  isCompleted    Boolean  @default(false)
+  completedAt    DateTime?
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  @@index([date])
+  @@index([employeeId])
+  @@index([taskTemplateId])
 }

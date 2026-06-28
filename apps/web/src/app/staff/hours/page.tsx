@@ -21,6 +21,7 @@ export default function WorkHoursReportPage() {
   const [editHourlyRate, setEditHourlyRate] = useState("");
   const [showAddRow, setShowAddRow] = useState(false);
   const [addForm, setAddForm] = useState({ userId: "", checkIn: "", checkOut: "", reason: "" });
+  const [page, setPage] = useState(1);
 
   // Employee hourly rate editor
   const [editingStaffRate, setEditingStaffRate] = useState<any>(null);
@@ -32,9 +33,13 @@ export default function WorkHoursReportPage() {
 
   const utils = trpc.useContext();
   const { data: staffList, refetch: refetchStaff } = trpc.getStaff.useQuery();
-  const { data: attendance, isLoading } = trpc.getAttendanceHistory.useQuery({ 
-    userId: selectedUser || undefined 
+  const { data: attendanceResponse, isLoading } = trpc.getAttendanceHistory.useQuery({ 
+    userId: selectedUser || undefined,
+    page,
+    limit: 20
   });
+  const attendanceList = attendanceResponse?.data || [];
+  const totalPages = attendanceResponse?.totalPages || 1;
 
   const editMutation = trpc.editAttendance.useMutation({
     onSuccess: () => {
@@ -67,7 +72,7 @@ export default function WorkHoursReportPage() {
   });
 
   // Filter attendance by date
-  const filteredAttendance = (attendance || []).filter(att => {
+  const filteredAttendance = attendanceList.filter((att: any) => {
     const d = new Date(att.checkIn);
     if (filterType === "daily") {
       const today = new Date(); today.setHours(0,0,0,0);
@@ -544,6 +549,13 @@ export default function WorkHoursReportPage() {
               )}
             </table>
           </div>
+          {totalPages > 1 && (
+            <div className="flex justify-between items-center p-4 border-t border-white/5 bg-brand-navy-light/10">
+              <button disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))} className="px-4 py-2 bg-white/5 rounded-xl disabled:opacity-50 text-white text-xs">السابق</button>
+              <span className="text-sm text-gray-400">صفحة {page} من {totalPages}</span>
+              <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="px-4 py-2 bg-white/5 rounded-xl disabled:opacity-50 text-white text-xs">التالي</button>
+            </div>
+          )}
         </div>
       </div>
     </div>

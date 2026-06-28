@@ -17,26 +17,34 @@ import {
   Edit2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { displayQuantity } from "../../utils/format";
 
 export default function SmartInventory() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDamageModal, setShowDamageModal] = useState(false);
   const [view, setView] = useState<"stock" | "history" | "damaged">("stock");
+  const [page, setPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
   
-  const inventoryQuery = trpc.getInventory.useQuery();
+  const inventoryQuery = trpc.getInventory.useQuery({ page, limit: 20, search: searchQuery });
+  const inventoryList = inventoryQuery.data?.data || [];
+  const totalPages = inventoryQuery.data?.totalPages || 1;
   const addInventoryMutation = trpc.addInventoryItem.useMutation();
   const updateInventoryMutation = trpc.updateInventoryItem.useMutation();
   const deleteInventoryMutation = trpc.deleteInventoryItem.useMutation();
   const reportDamagedMutation = trpc.reportDamagedItem.useMutation();
   
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [showTransferModal, setShowTransferModal] = useState(false);
 
-  const lowStockItems = inventoryQuery.data?.filter(i => i.quantity <= i.minThreshold) || [];
-  const auditLogsQuery = trpc.getInventoryAuditLogs.useQuery(undefined, { enabled: view === 'history' || view === 'damaged' });
+  const lowStockItems = inventoryList.filter((i: any) => i.quantity <= i.minThreshold);
+  
+  const movementsQuery = trpc.getInventoryMovements.useQuery({}, { enabled: view === 'history' || view === 'damaged' });
+  const transferMutation = trpc.transferInventory.useMutation();
 
   const displayedLogs = view === 'history' 
-    ? auditLogsQuery.data 
-    : auditLogsQuery.data?.filter(l => l.reason?.startsWith('إتلاف:'));
+    ? movementsQuery.data || []
+    : (movementsQuery.data || []).filter(l => l.type === 'DAMAGED');
 
   return (
     <div className="min-h-screen bg-brand-black p-10">
@@ -70,9 +78,9 @@ export default function SmartInventory() {
 
       {/* Summary Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-        <InventoryKPI title="إجمالي المواد" value={inventoryQuery.data?.length || 0} icon={<Layers />} color="gold" />
-        <InventoryKPI title="مواد تحت الحد الأدنى" value={lowStockItems.length} icon={<AlertCircle />} color="red" />
-        <InventoryKPI title="تنبيهات انتهاء الصلاحية" value={0} icon={<Calendar />} color="orange" />
+        <InventoryKPI title="إجمالي المواد (هذه الصفحة)" value={inventoryList.length} icon={<Layers />} color="gold" />
+        <InventoryKPI title="مواد في خطر النفاذ" value={lowStockItems.length} icon={<AlertCircle />} color="red" />
+        <InventoryKPI title="مواد قريبة من الانتهاء" value={0} icon={<Calendar />} color="orange" />
       </div>
 
       {view === 'stock' && (
@@ -81,16 +89,18 @@ export default function SmartInventory() {
             <thead className="bg-white/5 text-gray-500 text-xs uppercase">
                <tr>
                   <th className="p-6">المادة</th>
-                  <th className="p-6">الكمية المتوفرة</th>
+                  <th className="p-6 text-brand-orange">عربة (متوفر)</th>
+                  <th className="p-6 text-blue-400">البيت</th>
+                  <th className="p-6 text-purple-400">المخزن</th>
                   <th className="p-6">الحد الأدنى</th>
                   <th className="p-6">سعر الوحدة</th>
-                  <th className="p-6">المورد</th>
+                  <th className="p-6">إجراءات</th>
                   <th className="p-6">الحالة</th>
                   <th className="p-6">تاريخ الانتهاء</th>
                </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-               {inventoryQuery.data?.map((item) => (
+               {inventoryList.map((item: any) => (
                  <tr key={item.id} className="hover:bg-white/[0.02] transition-colors">
                     <td className="p-6">
                          <div className="flex items-center gap-4 relative group">
@@ -103,10 +113,14 @@ export default function SmartInventory() {
                             </button>
                          </div>
                     </td>
-                    <td className="p-6 font-black text-xl">{item.quantity} <span className="text-[10px] text-gray-500">{item.unit}</span></td>
+                    <td className="p-6 font-black text-xl text-brand-orange">{displayQuantity(item.quantity)} <span className="text-[10px] text-gray-500">{item.unit}</span></td>
+                    <td className="p-6 font-bold text-lg text-blue-400">{displayQuantity(item.homeQuantity)} <span className="text-[10px] text-gray-500">{item.unit}</span></td>
+                    <td className="p-6 font-bold text-lg text-purple-400">{displayQuantity(item.storageQuantity)} <span className="text-[10px] text-gray-500">{item.unit}</span></td>
                     <td className="p-6 text-gray-500">{item.minThreshold} {item.unit}</td>
                     <td className="p-6 text-brand-gold font-bold">{item.unitPrice} د.ب</td>
-                    <td className="p-6 text-xs text-gray-400">{item.supplier || 'غير محدد'}</td>
+                    <td className="p-6">
+                       <button onClick={() => { setEditingItem(item); setShowTransferModal(true); }} className="bg-white/5 hover:bg-brand-orange px-3 py-1 rounded-lg text-xs font-bold transition-all mr-2">تحويل</button>
+                    </td>
                     <td className="p-6">
                        {item.quantity <= item.minThreshold ? (
                          <span className="bg-red-500/10 text-red-500 px-3 py-1 rounded-lg text-[10px] font-bold">مخزون منخفض</span>
@@ -119,8 +133,18 @@ export default function SmartInventory() {
                     </td>
                  </tr>
                ))}
+               {inventoryList.length === 0 && (
+                 <tr><td colSpan={7} className="p-12 text-center text-gray-500">لا يوجد مواد في المخزون</td></tr>
+               )}
              </tbody>
           </table>
+          {totalPages > 1 && (
+            <div className="flex justify-between items-center p-4 border-t border-white/5 bg-brand-navy-light/10">
+              <button disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))} className="px-4 py-2 bg-white/5 rounded-xl disabled:opacity-50 text-white text-xs">السابق</button>
+              <span className="text-sm text-gray-400">صفحة {page} من {totalPages}</span>
+              <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="px-4 py-2 bg-white/5 rounded-xl disabled:opacity-50 text-white text-xs">التالي</button>
+            </div>
+          )}
        </div>
        )}
 
@@ -141,13 +165,19 @@ export default function SmartInventory() {
                     <tr key={log.id} className="hover:bg-white/[0.02] transition-colors">
                        <td className="p-6 text-sm">{new Date(log.createdAt).toLocaleString('ar-SA')}</td>
                        <td className="p-6 font-bold">{log.inventoryItem?.name}</td>
-                       <td className="p-6 text-sm text-gray-400">{log.userName}</td>
-                       <td className="p-6" dir="ltr">
-                          <span className={log.newQuantity > log.oldQuantity ? 'text-green-500' : 'text-red-500 font-bold'}>
-                             {Math.abs(log.newQuantity - log.oldQuantity).toFixed(2)}
-                          </span>
+                       <td className="p-6 text-sm text-gray-400">{log.createdBy}</td>
+                       <td className="p-6">
+                           <span className={log.quantityChange > 0 ? 'text-green-500' : 'text-red-500 font-bold'} dir="ltr">
+                              {log.quantityChange > 0 ? '+' : ''}{log.quantityChange}
+                           </span>
+                           <div className="text-[10px] text-gray-500 mt-1">{log.type}</div>
                        </td>
-                       <td className="p-6 text-sm text-brand-gold">{log.reason || '-'}</td>
+                       <td className="p-6 text-sm text-brand-gold">
+                         {log.reason || '-'}
+                         {log.fromLocation && log.toLocation && (
+                           <div className="text-[10px] text-blue-300 mt-1">من {log.fromLocation} إلى {log.toLocation}</div>
+                         )}
+                       </td>
                     </tr>
                   ))}
                   {displayedLogs?.length === 0 && (
@@ -191,14 +221,32 @@ export default function SmartInventory() {
           }}
         />}
         {showDamageModal && <ReportDamageModal
-          inventory={inventoryQuery.data || []}
+          inventory={inventoryList}
           onClose={() => setShowDamageModal(false)}
           onSubmit={async (data: any) => {
             try {
               await reportDamagedMutation.mutateAsync(data);
               inventoryQuery.refetch();
-              if (view === 'history' || view === 'damaged') auditLogsQuery.refetch();
+              if (view === 'history' || view === 'damaged') movementsQuery.refetch();
               setShowDamageModal(false);
+            } catch (e: any) {
+              alert(`خطأ: ${e.message}`);
+            }
+          }}
+        />}
+        {showTransferModal && editingItem && <TransferModal
+          item={editingItem}
+          onClose={() => { setShowTransferModal(false); setEditingItem(null); }}
+          onSubmit={async (data: any) => {
+            try {
+              await transferMutation.mutateAsync({
+                 inventoryItemId: editingItem.id,
+                 ...data
+              });
+              inventoryQuery.refetch();
+              movementsQuery.refetch();
+              setShowTransferModal(false);
+              setEditingItem(null);
             } catch (e: any) {
               alert(`خطأ: ${e.message}`);
             }
@@ -290,7 +338,8 @@ function ReportDamageModal({ inventory, onClose, onSubmit }: any) {
   const [formData, setFormData] = useState({
     inventoryItemId: '',
     quantity: '',
-    reason: ''
+    reason: '',
+    location: 'TRUCK'
   });
 
   const selectedItem = inventory.find((i: any) => i.id === formData.inventoryItemId);
@@ -306,7 +355,15 @@ function ReportDamageModal({ inventory, onClose, onSubmit }: any) {
              <label className="text-sm text-gray-400 mb-2 block">المادة التالفة</label>
              <select value={formData.inventoryItemId} onChange={e => setFormData({...formData, inventoryItemId: e.target.value})} className="w-full bg-brand-black p-4 rounded-xl border border-white/5">
                 <option value="">اختر المادة...</option>
-                {inventory.map((i: any) => <option key={i.id} value={i.id}>{i.name} (المتوفر: {i.quantity} {i.unit})</option>)}
+                {inventory.map((i: any) => <option key={i.id} value={i.id}>{i.name} (عربة: {i.quantity} | بيت: {i.homeQuantity} | مخزن: {i.storageQuantity}) {i.unit}</option>)}
+             </select>
+          </div>
+          <div>
+             <label className="text-sm text-gray-400 mb-2 block">موقع المادة التالفة</label>
+             <select value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} className="w-full bg-brand-black p-4 rounded-xl border border-white/5">
+                <option value="TRUCK">العربة</option>
+                <option value="HOME">البيت</option>
+                <option value="STORAGE">المخزن</option>
              </select>
           </div>
           <div>
@@ -331,6 +388,59 @@ function ReportDamageModal({ inventory, onClose, onSubmit }: any) {
              className="flex-1 bg-red-500 py-4 rounded-xl font-bold text-white disabled:opacity-50"
           >
              اعتماد وإبلاغ
+          </button>
+          <button onClick={onClose} className="flex-1 bg-white/10 py-4 rounded-xl font-bold">إلغاء</button>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function TransferModal({ item, onClose, onSubmit }: any) {
+  const [formData, setFormData] = useState({
+    fromLocation: 'HOME',
+    toLocation: 'TRUCK',
+    quantity: ''
+  });
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+      <div className="bg-brand-navy-light p-8 rounded-[40px] w-full max-w-md border border-white/10 shadow-2xl">
+        <div className="flex justify-between items-center mb-6">
+           <h2 className="text-2xl font-black text-brand-orange flex items-center gap-2"><ArrowUpRight /> تحويل مخزون</h2>
+        </div>
+        <p className="text-sm text-gray-400 mb-6">المادة: <span className="font-bold text-white">{item.name}</span></p>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+               <label className="text-sm text-gray-400 mb-2 block">من موقع</label>
+               <select value={formData.fromLocation} onChange={e => setFormData({...formData, fromLocation: e.target.value})} className="w-full bg-brand-black p-4 rounded-xl border border-white/5">
+                  <option value="TRUCK">العربة ({item.quantity})</option>
+                  <option value="HOME">البيت ({item.homeQuantity || 0})</option>
+                  <option value="STORAGE">المخزن ({item.storageQuantity || 0})</option>
+               </select>
+            </div>
+            <div>
+               <label className="text-sm text-gray-400 mb-2 block">إلى موقع</label>
+               <select value={formData.toLocation} onChange={e => setFormData({...formData, toLocation: e.target.value})} className="w-full bg-brand-black p-4 rounded-xl border border-white/5">
+                  <option value="TRUCK">العربة</option>
+                  <option value="HOME">البيت</option>
+                  <option value="STORAGE">المخزن</option>
+               </select>
+            </div>
+          </div>
+          <div>
+             <label className="text-sm text-gray-400 mb-2 block">الكمية المحولة ({item.unit})</label>
+             <input type="number" placeholder="مثال: 5" className="w-full bg-brand-black p-4 rounded-xl border border-white/5" value={formData.quantity} onChange={e => setFormData({...formData, quantity: e.target.value})} />
+          </div>
+        </div>
+        <div className="flex gap-4 mt-8">
+          <button 
+             onClick={() => onSubmit({ ...formData, quantity: Number(formData.quantity) })} 
+             disabled={!formData.quantity || formData.fromLocation === formData.toLocation}
+             className="flex-1 bg-brand-orange py-4 rounded-xl font-bold text-white disabled:opacity-50"
+          >
+             اعتماد التحويل
           </button>
           <button onClick={onClose} className="flex-1 bg-white/10 py-4 rounded-xl font-bold">إلغاء</button>
         </div>
