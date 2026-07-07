@@ -192,7 +192,7 @@ export default function ProductsPage() {
 
                 {/* Delete confirm overlay */}
                 {deleteConfirm === product.id && (
-                  <div className="absolute inset-0 bg-brand-navy/95 backdrop-blur flex flex-col items-center justify-center gap-4 p-6 rounded-[32px]">
+                  <div className="absolute inset-0 bg-brand-navy/95 backdrop-blur flex flex-col items-center justify-center gap-4 p-6 rounded-[32px] z-50">
                     <Trash2 className="text-red-500" size={32} />
                     <p className="text-center font-bold">هل تريد حذف "{product.name}"؟</p>
                     <div className="flex gap-3 w-full">
