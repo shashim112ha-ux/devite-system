@@ -46,6 +46,9 @@ export default function SmartInventory() {
     ? movementsQuery.data || []
     : (movementsQuery.data || []).filter(l => l.type === 'DAMAGED');
 
+  const userRole = typeof window !== 'undefined' ? localStorage.getItem('userRole') : null;
+  const isAdminOrManager = userRole === 'ADMIN' || userRole === 'MANAGER';
+
   return (
     <div className="min-h-screen bg-brand-black p-10">
       <header className="flex justify-between items-center mb-12">
@@ -68,10 +71,12 @@ export default function SmartInventory() {
                 الإبلاغ عن تلف
              </button>
            ) : (
-             <button onClick={() => { setEditingItem(null); setShowAddModal(true); }} className="bg-brand-orange px-8 py-3 rounded-2xl font-bold flex items-center gap-2 shadow-xl shadow-brand-orange/20">
-                <Plus size={20} />
-                إضافة مادة
-             </button>
+             isAdminOrManager ? (
+               <button onClick={() => { setEditingItem(null); setShowAddModal(true); }} className="bg-brand-orange px-8 py-3 rounded-2xl font-bold flex items-center gap-2 shadow-xl shadow-brand-orange/20">
+                  <Plus size={20} />
+                  إضافة مادة
+               </button>
+             ) : null
            )}
         </div>
       </header>
@@ -102,15 +107,17 @@ export default function SmartInventory() {
             <tbody className="divide-y divide-white/5">
                {inventoryList.map((item: any) => (
                  <tr key={item.id} className="hover:bg-white/[0.02] transition-colors">
-                    <td className="p-6">
+                     <td className="p-6">
                          <div className="flex items-center gap-4 relative group">
                             <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
                                <Package size={18} />
                             </div>
                             <span className="font-bold">{item.name}</span>
-                            <button onClick={() => { setEditingItem(item); setShowAddModal(true); }} className="bg-white/5 hover:bg-brand-orange hover:text-white p-2 rounded-lg transition-all text-brand-gold mr-4">
-                               <Edit2 size={14} />
-                            </button>
+                            {isAdminOrManager && (
+                              <button onClick={() => { setEditingItem(item); setShowAddModal(true); }} className="bg-white/5 hover:bg-brand-orange hover:text-white p-2 rounded-lg transition-all text-brand-gold mr-4">
+                                 <Edit2 size={14} />
+                              </button>
+                            )}
                          </div>
                     </td>
                     <td className="p-6 font-black text-xl text-brand-orange">{displayQuantity(item.quantity)} <span className="text-[10px] text-gray-500">{item.unit}</span></td>
@@ -119,7 +126,9 @@ export default function SmartInventory() {
                     <td className="p-6 text-gray-500">{item.minThreshold} {item.unit}</td>
                     <td className="p-6 text-brand-gold font-bold">{item.unitPrice} د.ب</td>
                     <td className="p-6">
-                       <button onClick={() => { setEditingItem(item); setShowTransferModal(true); }} className="bg-white/5 hover:bg-brand-orange px-3 py-1 rounded-lg text-xs font-bold transition-all mr-2">تحويل</button>
+                       {isAdminOrManager && (
+                         <button onClick={() => { setEditingItem(item); setShowTransferModal(true); }} className="bg-white/5 hover:bg-brand-orange px-3 py-1 rounded-lg text-xs font-bold transition-all mr-2">تحويل</button>
+                       )}
                     </td>
                     <td className="p-6">
                        {item.quantity <= item.minThreshold ? (
@@ -260,6 +269,7 @@ export default function SmartInventory() {
 function AddInventoryModal({ onClose, onAdd, onDelete, initialData }: any) {
   const [formData, setFormData] = useState(initialData || { name: '', quantity: 0, unit: 'كجم', minThreshold: 5, unitPrice: 0, supplier: '', expiryDate: '', reason: '' });
   const [totalPrice, setTotalPrice] = useState<number | string>(initialData ? initialData.quantity * initialData.unitPrice : '');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleTotalChange = (val: string) => {
      setTotalPrice(val);
@@ -277,6 +287,18 @@ function AddInventoryModal({ onClose, onAdd, onDelete, initialData }: any) {
      } else {
         setFormData({ ...formData, quantity: qty });
      }
+  };
+
+  const handleSubmit = async () => {
+     setIsSubmitting(true);
+     await onAdd(formData);
+     setIsSubmitting(false);
+  };
+
+  const handleDelete = async () => {
+     setIsSubmitting(true);
+     await onDelete(initialData.id);
+     setIsSubmitting(false);
   };
 
   return (
@@ -303,11 +325,11 @@ function AddInventoryModal({ onClose, onAdd, onDelete, initialData }: any) {
           )}
         </div>
         <div className="flex gap-4 mt-8">
-          <button onClick={() => onAdd(formData)} className="flex-1 bg-brand-orange py-4 rounded-xl font-bold">{initialData ? 'حفظ التعديلات' : 'إضافة'}</button>
+          <button onClick={handleSubmit} disabled={isSubmitting} className="flex-1 bg-brand-orange py-4 rounded-xl font-bold disabled:opacity-50">{initialData ? 'حفظ التعديلات' : 'إضافة'}</button>
           {initialData && (
-            <button onClick={() => onDelete(initialData.id)} className="flex-1 bg-red-500/10 text-red-500 py-4 rounded-xl font-bold border border-red-500/20 hover:bg-red-500 hover:text-white transition-all">حذف العنصر</button>
+            <button onClick={handleDelete} disabled={isSubmitting} className="flex-1 bg-red-500/10 text-red-500 py-4 rounded-xl font-bold border border-red-500/20 hover:bg-red-500 hover:text-white transition-all disabled:opacity-50">حذف العنصر</button>
           )}
-          <button onClick={onClose} className="flex-1 bg-white/10 py-4 rounded-xl font-bold">إلغاء</button>
+          <button onClick={onClose} disabled={isSubmitting} className="flex-1 bg-white/10 py-4 rounded-xl font-bold disabled:opacity-50">إلغاء</button>
         </div>
       </div>
     </motion.div>
@@ -341,6 +363,13 @@ function ReportDamageModal({ inventory, onClose, onSubmit }: any) {
     reason: '',
     location: 'TRUCK'
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    await onSubmit({ ...formData, quantity: Number(formData.quantity) });
+    setIsSubmitting(false);
+  };
 
   const selectedItem = inventory.find((i: any) => i.id === formData.inventoryItemId);
 
@@ -383,13 +412,13 @@ function ReportDamageModal({ inventory, onClose, onSubmit }: any) {
         </div>
         <div className="flex gap-4 mt-8">
           <button 
-             onClick={() => onSubmit({ ...formData, quantity: Number(formData.quantity) })} 
-             disabled={!formData.inventoryItemId || !formData.quantity || !formData.reason}
+             onClick={handleSubmit} 
+             disabled={!formData.inventoryItemId || !formData.quantity || !formData.reason || isSubmitting}
              className="flex-1 bg-red-500 py-4 rounded-xl font-bold text-white disabled:opacity-50"
           >
              اعتماد وإبلاغ
           </button>
-          <button onClick={onClose} className="flex-1 bg-white/10 py-4 rounded-xl font-bold">إلغاء</button>
+          <button onClick={onClose} disabled={isSubmitting} className="flex-1 bg-white/10 py-4 rounded-xl font-bold disabled:opacity-50">إلغاء</button>
         </div>
       </div>
     </motion.div>
@@ -402,6 +431,13 @@ function TransferModal({ item, onClose, onSubmit }: any) {
     toLocation: 'TRUCK',
     quantity: ''
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    await onSubmit({ ...formData, quantity: Number(formData.quantity) });
+    setIsSubmitting(false);
+  };
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
@@ -436,13 +472,13 @@ function TransferModal({ item, onClose, onSubmit }: any) {
         </div>
         <div className="flex gap-4 mt-8">
           <button 
-             onClick={() => onSubmit({ ...formData, quantity: Number(formData.quantity) })} 
-             disabled={!formData.quantity || formData.fromLocation === formData.toLocation}
+             onClick={handleSubmit} 
+             disabled={!formData.quantity || formData.fromLocation === formData.toLocation || isSubmitting}
              className="flex-1 bg-brand-orange py-4 rounded-xl font-bold text-white disabled:opacity-50"
           >
              اعتماد التحويل
           </button>
-          <button onClick={onClose} className="flex-1 bg-white/10 py-4 rounded-xl font-bold">إلغاء</button>
+          <button onClick={onClose} disabled={isSubmitting} className="flex-1 bg-white/10 py-4 rounded-xl font-bold disabled:opacity-50">إلغاء</button>
         </div>
       </div>
     </motion.div>

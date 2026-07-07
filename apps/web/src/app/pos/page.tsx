@@ -216,6 +216,7 @@ export default function POSPage() {
       setCustomerPhone("");
       setCustomerName("");
       setCustomerPoints(null);
+      productsQuery.refetch(); // Update inventory after order
     } catch (error: any) {
       alert(`فشل إرسال الطلب: ${error.message}`);
     }

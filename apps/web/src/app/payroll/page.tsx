@@ -293,9 +293,10 @@ export default function PayrollPage() {
                               </button>
                               <button
                                 onClick={() => approveMutation.mutate({ id: row.id })}
-                                className="bg-green-600 hover:bg-green-500 text-white font-bold px-3 py-2 rounded-lg text-xs transition-all flex items-center gap-1"
+                                disabled={approveMutation.isLoading}
+                                className="bg-green-600 hover:bg-green-500 text-white font-bold px-3 py-2 rounded-lg text-xs transition-all flex items-center gap-1 disabled:opacity-50"
                               >
-                                <CheckCircle size={12} /> اعتماد
+                                {approveMutation.isLoading && (approveMutation.variables as any)?.id === row.id ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />} اعتماد
                               </button>
                             </>
                           )}

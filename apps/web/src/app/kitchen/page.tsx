@@ -134,7 +134,7 @@ export default function ProfessionalKitchen() {
           <div className="space-y-6 flex-1 overflow-y-auto max-h-[70vh] pr-1">
             <AnimatePresence>
               {ordersQuery.data?.filter(o => o.status === 'NEW').map((order) => (
-                <KitchenOrderCard key={order.id} order={order} onUpdate={() => handleStatusUpdate(order)} onCancel={() => handleCancelOrder(order)} />
+                <KitchenOrderCard key={order.id} order={order} onUpdate={() => handleStatusUpdate(order)} onCancel={() => handleCancelOrder(order)} isUpdating={updateStatusMutation.isLoading} />
               ))}
             </AnimatePresence>
           </div>
@@ -148,7 +148,7 @@ export default function ProfessionalKitchen() {
           <div className="space-y-6 flex-1 overflow-y-auto max-h-[70vh] pr-1">
             <AnimatePresence>
               {ordersQuery.data?.filter(o => o.status === 'PREPARING').map((order) => (
-                <KitchenOrderCard key={order.id} order={order} onUpdate={() => handleStatusUpdate(order)} onCancel={() => handleCancelOrder(order)} />
+                <KitchenOrderCard key={order.id} order={order} onUpdate={() => handleStatusUpdate(order)} onCancel={() => handleCancelOrder(order)} isUpdating={updateStatusMutation.isLoading} />
               ))}
             </AnimatePresence>
           </div>
@@ -162,7 +162,7 @@ export default function ProfessionalKitchen() {
           <div className="space-y-6 flex-1 overflow-y-auto max-h-[70vh] pr-1">
             <AnimatePresence>
               {ordersQuery.data?.filter(o => o.status === 'READY').map((order) => (
-                <KitchenOrderCard key={order.id} order={order} onUpdate={() => handleStatusUpdate(order)} onCancel={() => handleCancelOrder(order)} />
+                <KitchenOrderCard key={order.id} order={order} onUpdate={() => handleStatusUpdate(order)} onCancel={() => handleCancelOrder(order)} isUpdating={updateStatusMutation.isLoading} />
               ))}
             </AnimatePresence>
           </div>
@@ -173,7 +173,7 @@ export default function ProfessionalKitchen() {
   );
 }
 
-function KitchenOrderCard({ order, onUpdate, onCancel }: any) {
+function KitchenOrderCard({ order, onUpdate, onCancel, isUpdating }: any) {
   const [elapsed, setElapsed] = useState(0);
   
   useEffect(() => {
@@ -242,7 +242,8 @@ function KitchenOrderCard({ order, onUpdate, onCancel }: any) {
             {(order.status === 'NEW' || order.status === 'PREPARING') && (
               <button 
                 onClick={onCancel}
-                className="px-4 py-2.5 rounded-xl font-bold text-sm bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all flex items-center gap-2 border border-red-500/20"
+                disabled={isUpdating}
+                className="px-4 py-2.5 rounded-xl font-bold text-sm bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all flex items-center gap-2 border border-red-500/20 disabled:opacity-50"
                 title="إلغاء الطلب وإرجاع المبلغ"
               >
                 <Trash2 size={16} /> حذف
@@ -250,7 +251,8 @@ function KitchenOrderCard({ order, onUpdate, onCancel }: any) {
             )}
             <button 
               onClick={onUpdate}
-              className={`px-6 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition-all ${
+              disabled={isUpdating}
+              className={`px-6 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition-all disabled:opacity-50 ${
                 order.status === 'NEW' ? 'bg-brand-orange text-black shadow-lg shadow-brand-orange/20' :
                 order.status === 'PREPARING' ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' :
                 'bg-brand-navy-light text-white'

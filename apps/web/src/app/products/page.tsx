@@ -35,6 +35,9 @@ export default function ProductsPage() {
     ? productsQuery.data
     : productsQuery.data?.filter(p => p.categoryId === selectedCategory);
 
+  const userRole = typeof window !== 'undefined' ? localStorage.getItem('userRole') : null;
+  const isAdminOrManager = userRole === 'ADMIN' || userRole === 'MANAGER';
+
   return (
     <div className="min-h-screen bg-brand-black p-10">
       {/* Header */}
@@ -95,25 +98,27 @@ export default function ProductsPage() {
                 className="bg-brand-navy-light rounded-[32px] border border-white/5 overflow-hidden group relative">
                 
                 {/* Action buttons */}
-                <div className="absolute top-3 left-3 flex gap-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => { setEditingProduct(product); setShowProductModal(true); }}
-                    className="p-2 bg-brand-navy/80 backdrop-blur rounded-xl text-brand-gold border border-white/10">
-                    <Edit2 size={14} />
-                  </button>
-                  <button onClick={() => setDeleteConfirm(product.id)}
-                    className="p-2 bg-red-500/20 backdrop-blur rounded-xl text-red-500 border border-red-500/20">
-                    <Trash2 size={14} />
-                  </button>
-                  <button onClick={async () => {
-                    await toggleVisMutation.mutateAsync({ id: product.id, isHidden: !product.isHidden });
-                    productsQuery.refetch();
-                  }}
-                    className={`p-2 backdrop-blur rounded-xl border ${product.isHidden ? "bg-gray-500/20 text-gray-400 border-gray-500/20" : "bg-blue-500/20 text-blue-400 border-blue-500/20"}`}
-                    title={product.isHidden ? "إظهار في المنيو" : "إخفاء من المنيو"}
-                  >
-                    {product.isHidden ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </button>
-                </div>
+                {isAdminOrManager && (
+                  <div className="absolute top-3 left-3 flex gap-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => { setEditingProduct(product); setShowProductModal(true); }}
+                      className="p-2 bg-brand-navy/80 backdrop-blur rounded-xl text-brand-gold border border-white/10">
+                      <Edit2 size={14} />
+                    </button>
+                    <button onClick={() => setDeleteConfirm(product.id)}
+                      className="p-2 bg-red-500/20 backdrop-blur rounded-xl text-red-500 border border-red-500/20">
+                      <Trash2 size={14} />
+                    </button>
+                    <button onClick={async () => {
+                      await toggleVisMutation.mutateAsync({ id: product.id, isHidden: !product.isHidden });
+                      productsQuery.refetch();
+                    }}
+                      className={`p-2 backdrop-blur rounded-xl border ${product.isHidden ? "bg-gray-500/20 text-gray-400 border-gray-500/20" : "bg-blue-500/20 text-blue-400 border-blue-500/20"}`}
+                      title={product.isHidden ? "إظهار في المنيو" : "إخفاء من المنيو"}
+                    >
+                      {product.isHidden ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                )}
 
                 {/* Hidden Badge */}
                 {product.isHidden && (
@@ -211,18 +216,20 @@ export default function ProductsPage() {
           {categoriesQuery.data?.map(cat => (
             <motion.div key={cat.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
               className="bg-brand-navy-light rounded-[32px] p-8 border border-white/5 relative group">
-              <div className="absolute top-4 left-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={() => { setEditingCategory(cat); setShowCategoryModal(true); }}
-                  className="p-2 bg-brand-navy rounded-xl text-brand-gold">
-                  <Edit2 size={14} />
-                </button>
-                <button onClick={async () => {
-                  try { await deleteCategoryMutation.mutateAsync({ id: cat.id }); refetchAll(); }
-                  catch(e: any) { alert(e.message); }
-                }} className="p-2 bg-red-500/20 rounded-xl text-red-500">
-                  <Trash2 size={14} />
-                </button>
-              </div>
+              {isAdminOrManager && (
+                <div className="absolute top-4 left-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => { setEditingCategory(cat); setShowCategoryModal(true); }}
+                    className="p-2 bg-brand-navy rounded-xl text-brand-gold">
+                    <Edit2 size={14} />
+                  </button>
+                  <button onClick={async () => {
+                    try { await deleteCategoryMutation.mutateAsync({ id: cat.id }); refetchAll(); }
+                    catch(e: any) { alert(e.message); }
+                  }} className="p-2 bg-red-500/20 rounded-xl text-red-500">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              )}
               <div className="w-14 h-14 bg-brand-black rounded-2xl flex items-center justify-center mb-5 text-2xl">
                 <Tag className="text-brand-gold" />
               </div>
@@ -322,11 +329,18 @@ function ProductModal({ product, categories, inventory, onClose, onSave }: any) 
       ingredients: v.ingredients?.map((i: any) => ({ inventoryItemId: i.inventoryItemId, amountRequired: i.amountRequired })) ?? []
     })) ?? []
   );
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const calculatedSystemCost = ingredients.reduce((sum, ing) => {
     const invItem = inventory?.find((i: any) => i.id === ing.inventoryItemId);
     return sum + (invItem ? invItem.unitPrice * ing.amountRequired : 0);
   }, 0);
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    await onSave({ ...form, ingredients, variants });
+    setIsSubmitting(false);
+  };
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -335,7 +349,7 @@ function ProductModal({ product, categories, inventory, onClose, onSave }: any) 
         
         <div className="flex justify-between items-center mb-8">
           <h2 className="text-3xl font-black text-brand-gold">{product ? "تعديل الصنف" : "إضافة صنف جديد"}</h2>
-          <button onClick={onClose} className="p-2 bg-white/5 rounded-xl"><X size={20} /></button>
+          <button onClick={onClose} disabled={isSubmitting} className="p-2 bg-white/5 rounded-xl disabled:opacity-50"><X size={20} /></button>
         </div>
 
         <div className="space-y-5">
@@ -514,11 +528,11 @@ function ProductModal({ product, categories, inventory, onClose, onSave }: any) 
           </div>
 
           <div className="flex gap-4 pt-4">
-            <button onClick={() => onSave({ ...form, ingredients, variants })}
-              className="flex-1 bg-brand-orange py-4 rounded-2xl font-black text-xl shadow-lg">
+            <button onClick={handleSubmit} disabled={isSubmitting}
+              className="flex-1 bg-brand-orange py-4 rounded-2xl font-black text-xl shadow-lg disabled:opacity-50">
               {product ? "حفظ التعديلات" : "إضافة الصنف"}
             </button>
-            <button onClick={onClose} className="flex-1 bg-white/5 py-4 rounded-2xl font-black text-xl">إلغاء</button>
+            <button onClick={onClose} disabled={isSubmitting} className="flex-1 bg-white/5 py-4 rounded-2xl font-black text-xl disabled:opacity-50">إلغاء</button>
           </div>
         </div>
       </motion.div>
@@ -528,6 +542,14 @@ function ProductModal({ product, categories, inventory, onClose, onSave }: any) 
 
 function CategoryModal({ category, onClose, onSave }: any) {
   const [name, setName] = useState(category?.name ?? "");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    await onSave(name);
+    setIsSubmitting(false);
+  };
+
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} exit={{ scale: 0.9 }}
@@ -537,8 +559,8 @@ function CategoryModal({ category, onClose, onSave }: any) {
           <input value={name} onChange={e => setName(e.target.value)} className="field-input" placeholder="مثلاً: المشروبات الباردة" />
         </Field>
         <div className="flex gap-4 mt-8">
-          <button onClick={() => onSave(name)} className="flex-1 bg-brand-orange py-4 rounded-2xl font-bold">حفظ</button>
-          <button onClick={onClose} className="flex-1 bg-white/5 py-4 rounded-2xl font-bold">إلغاء</button>
+          <button onClick={handleSubmit} disabled={!name || isSubmitting} className="flex-1 bg-brand-orange py-4 rounded-2xl font-bold disabled:opacity-50">حفظ</button>
+          <button onClick={onClose} disabled={isSubmitting} className="flex-1 bg-white/5 py-4 rounded-2xl font-bold disabled:opacity-50">إلغاء</button>
         </div>
       </motion.div>
     </div>
