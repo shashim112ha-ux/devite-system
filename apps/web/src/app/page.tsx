@@ -189,7 +189,7 @@ export default function CustomerHome() {
 
         {/* Products Grid */}
         <div className="grid grid-cols-2 gap-4">
-          {productsQuery.data?.filter(p => !selectedCategory || p.categoryId === selectedCategory).map((product) => (
+          {productsQuery.data?.filter(p => (!selectedCategory || p.categoryId === selectedCategory) && !p.isHidden).map((product) => (
             <motion.div 
               key={product.id}
               whileTap={{ scale: 0.98 }}
