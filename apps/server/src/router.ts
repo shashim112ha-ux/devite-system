@@ -280,10 +280,20 @@ export const appRouter = router({
   deleteProduct: managerProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      await ctx.prisma.productIngredient.deleteMany({ where: { productId: input.id } });
-      const product = await ctx.prisma.product.delete({ where: { id: input.id } });
-      await logAudit(ctx.prisma, ctx.user.id, 'DELETE_PRODUCT', `حذف الصنف: ${product.name}`);
-      return product;
+      try {
+        await ctx.prisma.productIngredient.deleteMany({ where: { productId: input.id } });
+        const product = await ctx.prisma.product.delete({ where: { id: input.id } });
+        await logAudit(ctx.prisma, ctx.user.id, 'DELETE_PRODUCT', `حذف الصنف: ${product.name}`);
+        return product;
+      } catch (error: any) {
+        if (error.code === 'P2003') {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'لا يمكن حذف هذا الصنف لارتباطه بطلبات مبيعات سابقة. يرجى إخفاؤه بدلاً من حذفه.'
+          });
+        }
+        throw error;
+      }
     }),
 
   toggleProductAvailability: managerProcedure

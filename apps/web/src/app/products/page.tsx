@@ -197,8 +197,14 @@ export default function ProductsPage() {
                     <p className="text-center font-bold">هل تريد حذف "{product.name}"؟</p>
                     <div className="flex gap-3 w-full">
                       <button onClick={async () => {
-                        await deleteProductMutation.mutateAsync({ id: product.id });
-                        setDeleteConfirm(null); refetchAll();
+                        try {
+                          await deleteProductMutation.mutateAsync({ id: product.id });
+                          setDeleteConfirm(null); 
+                          refetchAll();
+                        } catch (err: any) {
+                          alert("لا يمكن حذف هذا الصنف لارتباطه بطلبات أو بيانات سابقة. يمكنك (إخفاؤه من المنيو) بدلاً من حذفه للحفاظ على سجلات البيع.");
+                          setDeleteConfirm(null);
+                        }
                       }} className="flex-1 bg-red-500 py-2 rounded-xl font-bold text-sm">حذف</button>
                       <button onClick={() => setDeleteConfirm(null)} className="flex-1 bg-white/10 py-2 rounded-xl font-bold text-sm">إلغاء</button>
                     </div>
