@@ -121,7 +121,7 @@ export default function ProductsPage() {
                 )}
 
                 {/* Hidden Badge */}
-                {product.isHidden && (
+                {product.isHidden && deleteConfirm !== product.id && (
                   <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 pointer-events-none">
                     <span className="bg-black/80 text-white font-bold px-4 py-2 rounded-xl backdrop-blur-md border border-white/10 flex items-center gap-2">
                       <EyeOff size={16} className="text-gray-400" /> مخفي من المنيو
