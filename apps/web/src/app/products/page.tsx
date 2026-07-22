@@ -252,7 +252,7 @@ export default function ProductsPage() {
           <ProductModal
             product={editingProduct}
             categories={categoriesQuery.data ?? []}
-            inventory={inventoryQuery.data ?? []}
+            inventory={inventoryQuery.data?.data ?? []}
             onClose={() => setShowProductModal(false)}
             onSave={async (data: any) => {
               try {
