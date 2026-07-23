@@ -18,7 +18,7 @@ export default function ProductsPage() {
 
   const productsQuery = trpc.getProducts.useQuery();
   const categoriesQuery = trpc.getCategories.useQuery();
-  const inventoryQuery = trpc.getInventory.useQuery();
+  const inventoryQuery = trpc.getInventory.useQuery({ limit: 1000 });
 
   const createProductMutation = trpc.createProduct.useMutation();
   const updateProductMutation = trpc.updateProduct.useMutation();

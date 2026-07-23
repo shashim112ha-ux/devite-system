@@ -58,7 +58,7 @@ export default function ExpensesPage() {
   const { data: analytics, isLoading: loadingAnalytics } = trpc.getExpenseAnalytics.useQuery(queryParams);
   
   const { data: accountsList } = trpc.getAccounts.useQuery();
-  const { data: inventoryList } = trpc.getInventory.useQuery();
+  const { data: inventoryList } = trpc.getInventory.useQuery({ limit: 1000 });
 
   const addExpenseMutation = trpc.createDetailedExpense.useMutation({
     onSuccess: () => {
