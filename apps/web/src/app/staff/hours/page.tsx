@@ -366,6 +366,7 @@ export default function WorkHoursReportPage() {
             <div>
               <label className="text-xs text-gray-400 block mb-1">الموظف</label>
               <select value={addForm.userId} onChange={e => setAddForm({...addForm, userId: e.target.value})} className="w-full bg-brand-black border border-white/10 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-brand-gold">
+                <option value="" disabled>اختر الموظف...</option>
                 {staffList?.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             </div>

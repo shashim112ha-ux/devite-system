@@ -74,10 +74,8 @@ export default function ProfessionalKitchen() {
   }, [ordersQuery]);
 
   const handleStatusUpdate = async (order: any) => {
-    const currentStatus = order.status;
-    let nextStatus = 'PREPARING';
-    if (currentStatus === 'PREPARING') nextStatus = 'READY';
-    if (currentStatus === 'READY') nextStatus = 'DELIVERED';
+    // Jump straight to READY (One-step process)
+    const nextStatus = 'READY';
     
     await updateStatusMutation.mutateAsync({ orderId: order.id, status: nextStatus });
     
@@ -124,50 +122,20 @@ export default function ProfessionalKitchen() {
         </div>
       </header>
 
-      <main className="flex-1 p-10 grid grid-cols-1 md:grid-cols-3 gap-8 overflow-y-auto">
+      <main className="flex-1 p-10">
+        <div className="flex items-center justify-between mb-8">
+          <h2 className="text-xl font-black text-brand-orange flex items-center gap-2">
+            <Flame size={20} /> الطلبات الحالية ({ordersQuery.data?.filter(o => o.status === 'NEW' || o.status === 'PREPARING').length || 0})
+          </h2>
+        </div>
         
-        {/* NEW Orders */}
-        <div className="flex flex-col gap-6">
-          <h2 className="text-xl font-black text-brand-orange flex items-center gap-2 border-b border-brand-orange/20 pb-4">
-            <Flame size={20} /> الطلبات الجديدة ({ordersQuery.data?.filter(o => o.status === 'NEW').length || 0})
-          </h2>
-          <div className="space-y-6 flex-1 overflow-y-auto max-h-[70vh] pr-1">
-            <AnimatePresence>
-              {ordersQuery.data?.filter(o => o.status === 'NEW').map((order) => (
-                <KitchenOrderCard key={order.id} order={order} onUpdate={() => handleStatusUpdate(order)} onCancel={() => handleCancelOrder(order)} isUpdating={updateStatusMutation.isLoading} />
-              ))}
-            </AnimatePresence>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-8 overflow-y-auto max-h-[75vh] pr-1">
+          <AnimatePresence>
+            {ordersQuery.data?.filter(o => o.status === 'NEW' || o.status === 'PREPARING').map((order) => (
+              <KitchenOrderCard key={order.id} order={order} onUpdate={() => handleStatusUpdate(order)} onCancel={() => handleCancelOrder(order)} isUpdating={updateStatusMutation.isLoading} />
+            ))}
+          </AnimatePresence>
         </div>
-
-        {/* PREPARING Orders */}
-        <div className="flex flex-col gap-6">
-          <h2 className="text-xl font-black text-brand-gold flex items-center gap-2 border-b border-brand-gold/20 pb-4">
-            <Timer size={20} /> قيد التحضير ({ordersQuery.data?.filter(o => o.status === 'PREPARING').length || 0})
-          </h2>
-          <div className="space-y-6 flex-1 overflow-y-auto max-h-[70vh] pr-1">
-            <AnimatePresence>
-              {ordersQuery.data?.filter(o => o.status === 'PREPARING').map((order) => (
-                <KitchenOrderCard key={order.id} order={order} onUpdate={() => handleStatusUpdate(order)} onCancel={() => handleCancelOrder(order)} isUpdating={updateStatusMutation.isLoading} />
-              ))}
-            </AnimatePresence>
-          </div>
-        </div>
-
-        {/* READY Orders */}
-        <div className="flex flex-col gap-6">
-          <h2 className="text-xl font-black text-green-500 flex items-center gap-2 border-b border-green-500/20 pb-4">
-            <CheckCircle2 size={20} /> طلبات جاهزة ({ordersQuery.data?.filter(o => o.status === 'READY').length || 0})
-          </h2>
-          <div className="space-y-6 flex-1 overflow-y-auto max-h-[70vh] pr-1">
-            <AnimatePresence>
-              {ordersQuery.data?.filter(o => o.status === 'READY').map((order) => (
-                <KitchenOrderCard key={order.id} order={order} onUpdate={() => handleStatusUpdate(order)} onCancel={() => handleCancelOrder(order)} isUpdating={updateStatusMutation.isLoading} />
-              ))}
-            </AnimatePresence>
-          </div>
-        </div>
-
       </main>
     </div>
   );
@@ -252,13 +220,9 @@ function KitchenOrderCard({ order, onUpdate, onCancel, isUpdating }: any) {
             <button 
               onClick={onUpdate}
               disabled={isUpdating}
-              className={`px-6 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition-all disabled:opacity-50 ${
-                order.status === 'NEW' ? 'bg-brand-orange text-black shadow-lg shadow-brand-orange/20' :
-                order.status === 'PREPARING' ? 'bg-green-500 text-black shadow-lg shadow-green-500/20' :
-                'bg-brand-navy-light text-white'
-              }`}
+              className="px-6 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition-all disabled:opacity-50 bg-brand-orange text-black shadow-lg shadow-brand-orange/20"
             >
-              {order.status === 'NEW' ? 'بدء التحضير' : order.status === 'PREPARING' ? 'الطلب جاهز' : 'تم التسليم'} <ChevronRight size={16} />
+              تم الاستلام <CheckCircle2 size={16} />
             </button>
           </div>
         </div>
