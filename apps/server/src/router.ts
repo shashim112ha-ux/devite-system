@@ -1378,7 +1378,7 @@ export const appRouter = router({
     }),
 
   adminAddAttendance: managerProcedure
-    .input(z.object({ userId: z.string(), checkIn: z.date(), checkOut: z.date().optional().nullable(), reason: z.string().optional() }))
+    .input(z.object({ userId: z.string(), checkIn: z.coerce.date(), checkOut: z.coerce.date().optional().nullable(), reason: z.string().optional() }))
     .mutation(async ({ input, ctx }) => {
       const att = await ctx.prisma.attendance.create({ 
         data: {
@@ -1393,8 +1393,8 @@ export const appRouter = router({
   editAttendance: managerProcedure
     .input(z.object({ 
       id: z.string(), 
-      checkIn: z.date(), 
-      checkOut: z.date().optional().nullable(), 
+      checkIn: z.coerce.date(), 
+      checkOut: z.coerce.date().optional().nullable(), 
       reason: z.string(),
       overrideHours: z.number().optional(),   // if set, override hours directly
       hourlyRate: z.number().optional(),      // if set, update the employee's hourly rate
