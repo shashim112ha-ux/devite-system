@@ -208,8 +208,8 @@ export default function StaffManagement() {
                  {attendanceQuery.data?.map((item: any) => (
                    <tr key={item.id} className="hover:bg-white/[0.02] transition-colors">
                       <td className="p-6 font-bold">{item.user.name}</td>
-                      <td className="p-6">{new Date(item.checkIn).toLocaleTimeString('ar-SA')}</td>
-                      <td className="p-6">{item.checkOut ? new Date(item.checkOut).toLocaleTimeString('ar-SA') : '-'}</td>
+                      <td className="p-6 text-sm">{new Date(item.checkIn).toLocaleString('ar-SA')}</td>
+                      <td className="p-6 text-sm">{item.checkOut ? new Date(item.checkOut).toLocaleString('ar-SA') : '-'}</td>
                       <td className="p-6">
                          {item.checkOut ? (
                            <span className="bg-gray-500/10 text-gray-400 px-3 py-1 rounded-lg text-[10px] font-bold">منصرف</span>
