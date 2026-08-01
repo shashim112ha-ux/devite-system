@@ -156,7 +156,13 @@ export default function StaffManagement() {
                          <span className="bg-green-500/10 text-green-500 px-3 py-1 rounded-lg text-[10px] font-bold">جاهز للدفع</span>
                       </td>
                       <td className="p-6">
-                         <button className="bg-brand-orange/10 text-brand-orange p-2 rounded-xl"><CreditCard size={16}/></button>
+                         <button 
+                           onClick={() => window.location.href = '/payroll'}
+                           className="bg-brand-orange/10 text-brand-orange p-2 rounded-xl hover:bg-brand-orange/20 transition-colors"
+                           title="انتقل إلى مسير الرواتب"
+                         >
+                           <CreditCard size={16}/>
+                         </button>
                       </td>
                    </tr>
                  ))}
