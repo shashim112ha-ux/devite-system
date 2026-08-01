@@ -1859,8 +1859,8 @@ export const appRouter = router({
           pr = await ctx.prisma.payroll.create({
             data: {
               userId: u.id,
-              startDate: input.startDate,
-              endDate: input.endDate,
+              startDate: startDate,
+              endDate: endDate,
               presenceDays,
               absenceDays,
               workHours,
