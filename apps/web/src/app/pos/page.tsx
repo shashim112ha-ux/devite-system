@@ -94,19 +94,7 @@ export default function POSPage() {
       return;
     }
 
-    let isOverride = false;
-    if (!product.dynamicAvailable) {
-      const userRole = localStorage.getItem('userRole');
-      if (userRole === 'ADMIN' || userRole === 'MANAGER') {
-        const confirmOverride = confirm("عذراً، هذا المنتج غير متوفر حالياً. هل توافق على بيعه كمسؤول وتسجيل عجز (تجاوز مخزون)؟");
-        if (!confirmOverride) return;
-        isOverride = true;
-      } else {
-        alert("عذراً، هذا المنتج غير متوفر حالياً بسبب نقص المكونات في المخزن.");
-        return;
-      }
-    }
-    setNeedsOverride(isOverride);
+    setNeedsOverride(false);
     setSelectedProduct(product);
     setSize(product.sizes?.length > 0 ? product.sizes[0] : "-");
     setSugar(product.sugarLevels?.length > 0 ? product.sugarLevels[0] : "-");

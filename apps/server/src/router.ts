@@ -538,22 +538,12 @@ export const appRouter = router({
               for (const ing of ingredientsToUse) {
                 const needed = ing.amountRequired * item.quantity;
                 if (ing.inventoryItem.quantity < needed) {
-                  if (!input.overrideInventory) {
-                    throw new TRPCError({ 
-                      code: 'BAD_REQUEST', 
-                      message: `مخزون غير كافٍ للمادة: ${ing.inventoryItem.name}. المتبقي: ${ing.inventoryItem.quantity} ${ing.inventoryItem.unit} --MISSING_STOCK` 
-                    });
-                  } else {
-                    if (ctx.user?.role !== 'ADMIN' && ctx.user?.role !== 'MANAGER') {
-                       throw new TRPCError({ code: 'UNAUTHORIZED', message: 'ليس لديك صلاحية تجاوز المخزون. اطلب موافقة المدير.' });
-                    }
-                    missingItemsList.push({
-                       product: product.name,
-                       ingredient: ing.inventoryItem.name,
-                       needed,
-                       available: ing.inventoryItem.quantity
-                    });
-                  }
+                  missingItemsList.push({
+                     product: product.name,
+                     ingredient: ing.inventoryItem.name,
+                     needed,
+                     available: ing.inventoryItem.quantity
+                  });
                 }
               }
             }
@@ -643,7 +633,7 @@ export const appRouter = router({
           }
         });
 
-        if (missingItemsList.length > 0 && input.overrideInventory) {
+        if (missingItemsList.length > 0) {
            await tx.inventoryOverrideLog.create({
              data: {
                orderId: order.id,
