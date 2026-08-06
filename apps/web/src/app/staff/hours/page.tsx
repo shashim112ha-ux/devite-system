@@ -41,6 +41,14 @@ export default function WorkHoursReportPage() {
   const attendanceList = attendanceResponse?.data || [];
   const totalPages = attendanceResponse?.totalPages || 1;
 
+  // Separate query for printing - fetches ALL records
+  const { data: printAttendanceResponse } = trpc.getAttendanceHistory.useQuery({ 
+    userId: selectedUser || undefined,
+    page: 1,
+    limit: 10000
+  });
+  const printAttendanceList = printAttendanceResponse?.data || [];
+
   const editMutation = trpc.editAttendance.useMutation({
     onSuccess: () => {
       utils.getAttendanceHistory.invalidate();
@@ -73,6 +81,26 @@ export default function WorkHoursReportPage() {
 
   // Filter attendance by date
   const filteredAttendance = attendanceList.filter((att: any) => {
+    const d = new Date(att.checkIn);
+    if (filterType === "daily") {
+      const today = new Date(); today.setHours(0,0,0,0);
+      return d >= today;
+    } else if (filterType === "weekly") {
+      const w = new Date(); w.setDate(w.getDate() - 7); w.setHours(0,0,0,0);
+      return d >= w;
+    } else if (filterType === "monthly") {
+      const m = new Date(); m.setDate(1); m.setHours(0,0,0,0);
+      return d >= m;
+    } else if (filterType === "custom" && startDate && endDate) {
+      const s = new Date(startDate); s.setHours(0,0,0,0);
+      const e = new Date(endDate); e.setHours(23,59,59,999);
+      return d >= s && d <= e;
+    }
+    return true;
+  });
+
+  // Same filter applied on ALL records (for printing)
+  const printFilteredAttendance = printAttendanceList.filter((att: any) => {
     const d = new Date(att.checkIn);
     if (filterType === "daily") {
       const today = new Date(); today.setHours(0,0,0,0);
@@ -417,7 +445,7 @@ export default function WorkHoursReportPage() {
             <h3 className="font-black text-lg flex items-center gap-2">
               <Calendar className="text-brand-gold" size={20} /> سجل الحضور والانصراف التفصيلي
             </h3>
-            <span className="text-xs text-gray-400">{filteredAttendance.length} سجل</span>
+            <span className="text-xs text-gray-400 no-print">{filteredAttendance.length} سجل</span>
           </div>
 
           <div className="overflow-x-auto">
@@ -548,6 +576,71 @@ export default function WorkHoursReportPage() {
                   </tr>
                 </tfoot>
               )}
+            </table>
+
+            {/* Print-only table with ALL records */}
+            <table className="w-full text-right text-sm hidden print:table">
+              <thead className="bg-gray-100 text-gray-700 text-xs border-b border-gray-300">
+                <tr>
+                  <th className="p-3">الموظف</th>
+                  <th className="p-3">التاريخ</th>
+                  <th className="p-3">وقت الحضور</th>
+                  <th className="p-3">وقت الانصراف</th>
+                  <th className="p-3">ساعات العمل</th>
+                  <th className="p-3">سعر الساعة</th>
+                  <th className="p-3">الراتب المستحق</th>
+                  <th className="p-3 text-center">الحالة</th>
+                </tr>
+              </thead>
+              <tbody>
+                {printFilteredAttendance.length === 0 ? (
+                  <tr><td colSpan={8} className="p-12 text-center text-gray-500">لا توجد سجلات في هذه الفترة</td></tr>
+                ) : printFilteredAttendance.map((att: any) => {
+                  const checkIn = new Date(att.checkIn);
+                  const checkOut = att.checkOut ? new Date(att.checkOut) : null;
+                  const hours = checkOut ? (checkOut.getTime() - checkIn.getTime()) / 3600000 : null;
+                  const empRecord = staffList?.find(u => u.id === att.userId) as any;
+                  const rate = empRecord?.hourlyRate || 0;
+                  const pay = hours !== null ? hours * rate : null;
+                  return (
+                    <tr key={att.id} className="border-b border-gray-100">
+                      <td className="p-2 font-bold">{att.user?.name}</td>
+                      <td className="p-2 text-xs">{checkIn.toLocaleDateString('ar-SA', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</td>
+                      <td className="p-2 font-mono text-xs">{checkIn.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}</td>
+                      <td className="p-2 font-mono text-xs">{checkOut ? checkOut.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' }) : 'لم يغادر'}</td>
+                      <td className="p-2 font-bold">{hours !== null ? `${hours.toFixed(2)} س` : '—'}</td>
+                      <td className="p-2 text-xs">{rate > 0 ? `${rate.toFixed(3)} د.ب` : '—'}</td>
+                      <td className="p-2 font-bold">{pay !== null && pay > 0 ? `${pay.toFixed(3)} د.ب` : '—'}</td>
+                      <td className="p-2 text-center text-xs">
+                        {!checkOut ? 'جارٍ' : hours && hours >= 8 ? '✓ كامل' : 'ناقص'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot className="border-t-2 border-gray-300 bg-gray-50 font-black">
+                <tr>
+                  <td colSpan={4} className="p-3">الإجمالي ({printFilteredAttendance.length} سجل)</td>
+                  <td className="p-3">
+                    {printFilteredAttendance.reduce((sum, att: any) => {
+                      const checkOut = att.checkOut ? new Date(att.checkOut) : null;
+                      return sum + (checkOut ? (checkOut.getTime() - new Date(att.checkIn).getTime()) / 3600000 : 0);
+                    }, 0).toFixed(2)} س
+                  </td>
+                  <td className="p-3">{hourlyRate > 0 ? `${hourlyRate.toFixed(3)} د.ب/س` : '—'}</td>
+                  <td className="p-3">
+                    {estimatedSalary > 0 ? `${(
+                      printFilteredAttendance.reduce((sum, att: any) => {
+                        const checkOut = att.checkOut ? new Date(att.checkOut) : null;
+                        const hours = checkOut ? (checkOut.getTime() - new Date(att.checkIn).getTime()) / 3600000 : 0;
+                        const empRecord = staffList?.find(u => u.id === att.userId) as any;
+                        return sum + hours * (empRecord?.hourlyRate || 0);
+                      }, 0)
+                    ).toFixed(3)} د.ب` : '—'}
+                  </td>
+                  <td></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
           {totalPages > 1 && (
