@@ -933,7 +933,36 @@ export const appRouter = router({
         totalProductsSold += o.items ? o.items.reduce((sum, item) => sum + item.quantity, 0) : 0;
       });
 
-      const chartData = Object.entries(grouped).map(([name, sales]) => ({ name, sales }));
+      // Fetch expenses for the period (moved up so we can use in chartData)
+      const expensesList = await ctx.prisma.expense.findMany({
+        where: { date: { gte: startDate } }
+      });
+
+      // Group expenses by the same period key
+      const expensesGrouped: Record<string, number> = {};
+      expensesList.forEach(e => {
+        let key = '';
+        const d = new Date(e.date);
+        if (input.period === 'daily') key = d.toLocaleDateString('ar-BH');
+        if (input.period === 'weekly') {
+          const week = Math.ceil(d.getDate() / 7);
+          key = `الأسبوع ${week} - ${d.toLocaleString('ar-BH', { month: 'short' })}`;
+        }
+        if (input.period === 'monthly') key = d.toLocaleString('ar-BH', { month: 'long', year: 'numeric' });
+        if (input.period === 'quarterly') {
+          const q = Math.ceil((d.getMonth() + 1) / 3);
+          key = `الربع ${q} - ${d.getFullYear()}`;
+        }
+        expensesGrouped[key] = (expensesGrouped[key] || 0) + e.amount;
+      });
+
+      // Merge all keys from sales and expenses, build chartData with profit
+      const allKeys = Array.from(new Set([...Object.keys(grouped), ...Object.keys(expensesGrouped)]));
+      const chartData = allKeys.map(name => {
+        const salesVal = grouped[name] || 0;
+        const expensesVal = expensesGrouped[name] || 0;
+        return { name, sales: salesVal, expenses: expensesVal, profit: salesVal - expensesVal };
+      });
       
       const sales = orders.reduce((sum, o) => sum + o.total, 0);
       const cash = orders.filter(o => o.paymentMethod === 'CASH').reduce((sum, o) => sum + o.total, 0);
@@ -941,9 +970,6 @@ export const appRouter = router({
       const benefit = orders.filter(o => o.paymentMethod === 'BENEFIT').reduce((sum, o) => sum + o.total, 0);
       const online = orders.filter(o => o.paymentMethod === 'ONLINE').reduce((sum, o) => sum + o.total, 0);
       
-      const expensesList = await ctx.prisma.expense.findMany({
-        where: { date: { gte: startDate } }
-      });
       const expenses = expensesList.reduce((sum, e) => sum + e.amount, 0);
       
       const net = sales - expenses;
