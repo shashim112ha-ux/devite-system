@@ -5,7 +5,7 @@ import { trpc } from "../../utils/trpc";
 import { 
   TrendingDown, Plus, Sparkles, DollarSign, Tag, Image, 
   Calendar, FileText, Loader2, AlertCircle, ShoppingBag, Wallet, PieChart as PieChartIcon,
-  Edit2, X, Check
+  Edit2, X, Check, Printer
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts";
 
@@ -277,7 +277,7 @@ export default function ExpensesPage() {
             إدارة وتتبع ومراقبة جميع مدفوعات ومصروفات النظام
           </p>
         </div>
-        <div>
+        <div className="print:hidden">
           <button
             onClick={() => setShowAddForm(!showAddForm)}
             className="bg-brand-orange hover:bg-brand-orange/90 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-brand-orange/20 flex items-center gap-2 text-sm"
@@ -288,7 +288,7 @@ export default function ExpensesPage() {
         </div>
       </div>
       {/* Filter Section */}
-      <div className="bg-brand-navy-light/40 border border-white/5 rounded-2xl p-6">
+      <div className="bg-brand-navy-light/40 border border-white/5 rounded-2xl p-6 print:hidden">
         <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-brand-gold"><Calendar size={20} /> تصفية السجل</h3>
         <div className="flex flex-wrap gap-4 items-center">
           {['daily', 'weekly', 'monthly', 'all', 'custom'].map(type => (
@@ -431,7 +431,7 @@ export default function ExpensesPage() {
       )}
 
       {/* Analytics Dashboard Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 print:hidden">
         {/* Stats Cards */}
         <div className="space-y-4">
           <div className="bg-brand-navy-light/60 p-6 rounded-[30px] border border-white/5 flex flex-col justify-center items-center shadow-lg text-center">
@@ -532,7 +532,15 @@ export default function ExpensesPage() {
           <h2 className="text-xl font-bold flex items-center gap-3">
             <FileText className="text-brand-orange" /> السجل الكامل للمصروفات
           </h2>
-          <span className="bg-white/5 px-4 py-2 rounded-lg text-sm text-gray-400 font-bold tracking-widest">{analytics?.count || 0} عملية مسجلة</span>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => window.print()}
+              className="bg-brand-navy-light text-white p-2 px-4 rounded-xl border border-white/10 hover:bg-white/10 flex items-center gap-2 print:hidden"
+            >
+              <Printer size={16} /> طباعة السجل
+            </button>
+            <span className="bg-white/5 px-4 py-2 rounded-lg text-sm text-gray-400 font-bold tracking-widest print:hidden">{analytics?.count || 0} عملية مسجلة</span>
+          </div>
         </div>
         
         <div className="overflow-x-auto">
