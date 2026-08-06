@@ -2217,7 +2217,8 @@ export const appRouter = router({
       paymentMethod: z.string().optional(),
       accountPaidFrom: z.string().optional(),
       accountId: z.string().optional().nullable(),
-      inventoryItemId: z.string().optional().nullable()
+      inventoryItemId: z.string().optional().nullable(),
+      date: z.string().optional()
     }))
     .mutation(async ({ input, ctx }) => {
       const qty = input.quantity ?? 1;
@@ -2239,7 +2240,8 @@ export const appRouter = router({
             accountPaidFrom: input.accountPaidFrom || 'الخزينة الرئيسية',
             accountId: input.accountId,
             inventoryItemId: input.inventoryItemId,
-            recordedById: ctx.user?.id
+            recordedById: ctx.user?.id,
+            ...(input.date ? { date: new Date(input.date) } : {})
           }
         });
 

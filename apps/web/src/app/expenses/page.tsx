@@ -33,6 +33,7 @@ export default function ExpensesPage() {
   const [inventoryItemId, setInventoryItemId] = useState("");
   const [supplier, setSupplier] = useState("");
   const [receiptBase64, setReceiptBase64] = useState<string | null>(null);
+  const [expenseDate, setExpenseDate] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
 
   // Edit expense state
@@ -126,6 +127,7 @@ export default function ExpensesPage() {
     setAccountId("");
     setInventoryItemId("");
     setSupplier("");
+    setExpenseDate("");
     setReceiptBase64(null);
   };
 
@@ -163,7 +165,8 @@ export default function ExpensesPage() {
       paymentMethod,
       accountPaidFrom: accountsList?.find(a => a.id === accountId)?.name || accountPaidFrom,
       accountId: accountId || undefined,
-      inventoryItemId: inventoryItemId || undefined
+      inventoryItemId: inventoryItemId || undefined,
+      date: expenseDate || undefined
     });
   };
 
@@ -335,6 +338,10 @@ export default function ExpensesPage() {
               <div className="space-y-2">
                 <label className="text-sm text-gray-400">الغرض (اختياري)</label>
                 <input type="text" placeholder="مثال: شراء قهوة للمكتب" value={purpose} onChange={e => setPurpose(e.target.value)} className="w-full bg-brand-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-brand-orange" />
+                    <div className="space-y-2">
+                      <label className="text-sm text-gray-400">تاريخ المصروف</label>
+                      <input type="date" value={expenseDate} onChange={e => setExpenseDate(e.target.value)} className="w-full bg-brand-black/50 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-brand-orange" />
+                    </div>
               </div>
 
               <div className="space-y-2">
@@ -431,7 +438,7 @@ export default function ExpensesPage() {
       )}
 
       {/* Analytics Dashboard Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 print:hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Stats Cards */}
         <div className="space-y-4">
           <div className="bg-brand-navy-light/60 p-6 rounded-[30px] border border-white/5 flex flex-col justify-center items-center shadow-lg text-center">
