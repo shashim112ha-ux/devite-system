@@ -44,6 +44,7 @@ export default function ExpensesPage() {
   const [editTotalPrice, setEditTotalPrice] = useState('0');
   const [editPaymentMethod, setEditPaymentMethod] = useState('');
   const [editAccountId, setEditAccountId] = useState('');
+  const [editInventoryItemId, setEditInventoryItemId] = useState('');
 
   const userRole = typeof window !== 'undefined' ? localStorage.getItem('userRole') : null;
   const isAdminOrManager = userRole === 'ADMIN' || userRole === 'MANAGER';
@@ -91,6 +92,7 @@ export default function ExpensesPage() {
     setEditTotalPrice(String(expense.amount));
     setEditPaymentMethod(expense.paymentMethod || 'CASH');
     setEditAccountId(expense.accountId || '');
+    setEditInventoryItemId(expense.inventoryItemId || '');
   };
 
   const saveEdit = () => {
@@ -108,6 +110,7 @@ export default function ExpensesPage() {
       unitPrice: total / qty,
       paymentMethod: editPaymentMethod,
       accountId: editAccountId || null,
+      inventoryItemId: editInventoryItemId || null,
     });
   };
 
@@ -232,6 +235,19 @@ export default function ExpensesPage() {
                 </select>
                 {editAccountId && editAccountId !== editingExpense.accountId && (
                   <p className="text-xs text-orange-400 mt-1">⚠️ سيتم تحديث الرصيد تلقائياً</p>
+                )}
+              </div>
+
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">📦 ربط بصنف في المخزون (اختياري)</label>
+                <select value={editInventoryItemId} onChange={e => setEditInventoryItemId(e.target.value)} className="w-full bg-brand-black border border-white/10 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-brand-gold">
+                  <option value="">— لا يوجد ربط بالمخزون —</option>
+                  {inventoryList?.data?.map((inv: any) => (
+                    <option key={inv.id} value={inv.id}>{inv.name} ({inv.unit}) — السعر: {Number(inv.unitPrice).toFixed(3)}</option>
+                  ))}
+                </select>
+                {editInventoryItemId && (
+                  <p className="text-xs text-orange-400 mt-1">⚠️ سيتم تحديث كميات وتكلفة المخزون تلقائياً</p>
                 )}
               </div>
 

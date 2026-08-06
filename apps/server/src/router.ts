@@ -2365,11 +2365,12 @@ export const appRouter = router({
       unitPrice: z.number().optional(),
       paymentMethod: z.string().optional(),
       accountId: z.string().optional().nullable(),
+      inventoryItemId: z.string().optional().nullable(),
     }))
     .mutation(async ({ input, ctx }) => {
       const { id, ...data } = input;
 
-      // Get old expense to reverse account balance if needed
+      // Get old expense to reverse account balance and inventory if needed
       const oldExpense = await ctx.prisma.expense.findUnique({ where: { id } });
       if (!oldExpense) throw new Error('المصروف غير موجود');
 
@@ -2386,6 +2387,26 @@ export const appRouter = router({
           });
         }
 
+        // Reverse old inventory increment
+        if (oldExpense.inventoryItemId && oldExpense.quantity) {
+          await tx.inventoryItem.update({
+            where: { id: oldExpense.inventoryItemId },
+            data: { quantity: { decrement: oldExpense.quantity } }
+          });
+          await tx.inventoryMovement.create({
+             data: {
+               inventoryItemId: oldExpense.inventoryItemId,
+               type: 'ADJUSTMENT',
+               quantityChange: -oldExpense.quantity,
+               quantityBefore: 0, // Simplified for reversal
+               quantityAfter: 0,
+               relatedExpenseId: oldExpense.id,
+               reason: 'تراجع عن تعديل مصروف',
+               createdBy: ctx.user?.name || 'النظام'
+             }
+          });
+        }
+
         const exp = await tx.expense.update({
           where: { id },
           data: {
@@ -2393,6 +2414,7 @@ export const appRouter = router({
             amount: newAmount,
             quantity: qty,
             unitPrice: price,
+            inventoryItemId: data.inventoryItemId !== undefined ? data.inventoryItemId : oldExpense.inventoryItemId
           }
         });
 
@@ -2402,6 +2424,37 @@ export const appRouter = router({
           await tx.account.update({
             where: { id: newAccountId },
             data: { balance: { decrement: newAmount } }
+          });
+        }
+
+        // Apply new inventory increment
+        const newInventoryItemId = data.inventoryItemId !== undefined ? data.inventoryItemId : oldExpense.inventoryItemId;
+        if (newInventoryItemId && qty) {
+          const existingItem = await tx.inventoryItem.findUnique({ where: { id: newInventoryItemId } });
+          let newUnitPrice = price;
+          if (existingItem && existingItem.quantity > 0) {
+            newUnitPrice = ((existingItem.quantity * existingItem.unitPrice) + (qty * price)) / (existingItem.quantity + qty);
+          }
+          await tx.inventoryItem.update({
+            where: { id: newInventoryItemId },
+            data: { 
+              quantity: { increment: qty },
+              unitPrice: newUnitPrice
+            }
+          });
+          await tx.inventoryMovement.create({
+            data: {
+              inventoryItemId: newInventoryItemId,
+              type: 'PURCHASE',
+              quantityChange: qty,
+              quantityBefore: existingItem ? existingItem.quantity : 0,
+              quantityAfter: existingItem ? existingItem.quantity + qty : qty,
+              unitCost: newUnitPrice,
+              totalCost: newAmount,
+              relatedExpenseId: exp.id,
+              reason: 'تعديل مصروف: ' + exp.category,
+              createdBy: ctx.user?.name || 'النظام'
+            }
           });
         }
 
