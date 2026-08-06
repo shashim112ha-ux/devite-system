@@ -3247,6 +3247,123 @@ export const appRouter = router({
       }
     }),
 
+  // Create a historical/past sale with a custom date
+  createHistoricalSale: cashierProcedure
+    .input(z.object({
+      cashierId: z.string().optional(),
+      customerPhone: z.string().optional(),
+      customerName: z.string().optional(),
+      items: z.array(z.object({
+        productId: z.string(),
+        quantity: z.number(),
+        price: z.number(),
+        notes: z.string().optional(),
+      })),
+      paymentMethod: z.string(),
+      total: z.number(),
+      notes: z.string().optional(),
+      date: z.string(), // ISO date string for the historical date
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const historicalDate = new Date(input.date);
+
+      const lastOrder = await ctx.prisma.order.findFirst({ orderBy: { orderNumber: 'desc' } });
+      const nextOrderNumber = (lastOrder?.orderNumber || 0) + 1;
+
+      let customerId: string | undefined = undefined;
+      if (input.customerPhone) {
+        const customer = await ctx.prisma.customer.upsert({
+          where: { phone: input.customerPhone },
+          update: { points: { increment: Math.floor(input.total) } },
+          create: {
+            phone: input.customerPhone,
+            name: input.customerName || 'زبون بدون اسم',
+            points: Math.floor(input.total)
+          }
+        });
+        customerId = customer.id;
+      }
+
+      let finalCashierId = input.cashierId;
+      if (finalCashierId) {
+        const userExists = await ctx.prisma.user.findUnique({ where: { id: finalCashierId } });
+        if (!userExists) finalCashierId = undefined;
+      }
+
+      // Calculate profit
+      const productIds = Array.from(new Set(input.items.map(i => i.productId)));
+      const products = await ctx.prisma.product.findMany({
+        where: { id: { in: productIds } },
+        include: { ingredients: { include: { inventoryItem: true } } }
+      });
+      const productMap = new Map(products.map(p => [p.id, p]));
+      
+      let totalCost = 0;
+      for (const item of input.items) {
+        const product = productMap.get(item.productId);
+        if (product) {
+          for (const ing of product.ingredients) {
+            totalCost += (ing.inventoryItem.unitPrice || 0) * ing.amountRequired * item.quantity;
+          }
+        }
+      }
+
+      const order = await ctx.prisma.order.create({
+        data: {
+          orderNumber: nextOrderNumber,
+          cashierId: finalCashierId,
+          customerId: customerId,
+          total: input.total,
+          paymentMethod: input.paymentMethod,
+          notes: input.notes,
+          status: 'DELIVERED',
+          estimatedTime: 0,
+          profit: input.total - totalCost,
+          createdAt: historicalDate,
+          items: {
+            create: input.items.map(item => ({
+              productId: item.productId,
+              quantity: item.quantity,
+              price: item.price,
+              notes: item.notes
+            }))
+          }
+        },
+        include: { items: { include: { product: true } } }
+      });
+
+      // Update account balance
+      const paymentType = input.paymentMethod === 'CASH' ? 'CASH' : 'CARD';
+      let account = await ctx.prisma.account.findFirst({
+        where: { type: paymentType, isActive: true },
+        orderBy: { createdAt: 'asc' }
+      });
+      if (!account) {
+        account = await ctx.prisma.account.create({
+          data: {
+            name: paymentType === 'CASH' ? 'صندوق الكاش الافتراضي' : 'حساب البنك الافتراضي',
+            type: paymentType,
+            balance: 0,
+            isActive: true
+          }
+        });
+      }
+      await ctx.prisma.account.update({
+        where: { id: account.id },
+        data: { balance: { increment: input.total } }
+      });
+
+      await ctx.prisma.auditLog.create({
+        data: {
+          userId: ctx.user?.id || 'SYSTEM',
+          action: 'HISTORICAL_SALE_CREATED',
+          details: `تم تسجيل مبيعة تاريخية برقم ${order.orderNumber} بتاريخ ${historicalDate.toLocaleDateString('ar-BH')}`
+        }
+      });
+
+      return order;
+    }),
+
 });
 
 export type AppRouter = typeof appRouter;
