@@ -15,7 +15,9 @@ import jsPDF from "jspdf";
 import { MessageCircle } from "lucide-react";
 
 export default function ReportsPage() {
-  const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'quarterly'>('daily');
+  const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'quarterly' | 'custom'>('daily');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
   const [userRole, setUserRole] = useState("ADMIN");
 
   useEffect(() => {
@@ -30,7 +32,10 @@ export default function ReportsPage() {
     }
   }, []);
 
-  const reportQuery = trpc.getReportData.useQuery({ period });
+  const reportQuery = trpc.getReportData.useQuery(
+    { period, ...(period === 'custom' ? { startDate: customStart, endDate: customEnd } : {}) },
+    { enabled: period !== 'custom' || (!!customStart && !!customEnd) }
+  );
   const printRef = useRef<HTMLDivElement>(null);
 
   const data = reportQuery.data;
@@ -111,19 +116,47 @@ export default function ReportsPage() {
       </header>
 
       <div ref={printRef} className="print:text-black">
-        <div className="flex gap-4 mb-8 print:hidden">
-          {['daily', 'weekly', 'monthly', 'quarterly'].filter(p => {
+        <div className="flex gap-4 mb-8 print:hidden flex-wrap items-center">
+          {['daily', 'weekly', 'monthly', 'quarterly', 'custom'].filter(p => {
              if ((userRole === 'INVESTOR' || userRole === 'INVESTOR_STAFF') && (p === 'daily' || p === 'weekly')) return false;
              return true;
           }).map((p) => (
             <button
               key={p}
               onClick={() => setPeriod(p as any)}
-              className={`px-6 py-2 rounded-xl font-bold text-sm transition-colors ${period === p ? 'bg-brand-orange text-black' : 'bg-brand-navy-light text-gray-400 hover:text-white border border-white/5'}`}
+              className={`px-6 py-2 rounded-xl font-bold text-sm transition-colors ${
+                period === p ? 'bg-brand-orange text-black' : 'bg-brand-navy-light text-gray-400 hover:text-white border border-white/5'
+              }`}
             >
-              {p === 'daily' ? 'يومي' : p === 'weekly' ? 'أسبوعي' : p === 'monthly' ? 'شهري' : 'ربع سنوي'}
+              {p === 'daily' ? 'يومي' : p === 'weekly' ? 'أسبوعي' : p === 'monthly' ? 'شهري' : p === 'quarterly' ? 'ربع سنوي' : 'مخصص'}
             </button>
           ))}
+
+          {/* Custom date inputs */}
+          {period === 'custom' && (
+            <div className="flex items-center gap-3 bg-brand-navy-light border border-brand-orange/30 px-4 py-2 rounded-2xl">
+              <span className="text-xs text-gray-400 font-bold">من</span>
+              <input
+                type="date"
+                value={customStart}
+                onChange={e => setCustomStart(e.target.value)}
+                className="bg-transparent text-white text-sm focus:outline-none cursor-pointer"
+              />
+              <span className="text-gray-500">—</span>
+              <span className="text-xs text-gray-400 font-bold">إلى</span>
+              <input
+                type="date"
+                value={customEnd}
+                onChange={e => setCustomEnd(e.target.value)}
+                className="bg-transparent text-white text-sm focus:outline-none cursor-pointer"
+              />
+              {customStart && customEnd && (
+                <span className="text-xs text-brand-orange font-bold mr-2">
+                  {Math.ceil((new Date(customEnd).getTime() - new Date(customStart).getTime()) / 86400000) + 1} يوم
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {reportQuery.isLoading ? (

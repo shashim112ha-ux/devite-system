@@ -900,59 +900,69 @@ export const appRouter = router({
   }),
 
   getReportData: investorProcedure
-    .input(z.object({ period: z.enum(['daily', 'weekly', 'monthly', 'quarterly']) }))
+    .input(z.object({
+      period: z.enum(['daily', 'weekly', 'monthly', 'quarterly', 'custom']),
+      startDate: z.string().optional(),
+      endDate: z.string().optional(),
+    }))
     .query(async ({ input, ctx }) => {
       const now = new Date();
       let startDate = new Date();
+      let endDate: Date | undefined = undefined;
+
       if (input.period === 'daily') startDate.setDate(now.getDate() - 7);
       if (input.period === 'weekly') startDate.setDate(now.getDate() - 30);
       if (input.period === 'monthly') startDate.setMonth(now.getMonth() - 12);
       if (input.period === 'quarterly') startDate.setMonth(now.getMonth() - 36);
+      if (input.period === 'custom' && input.startDate && input.endDate) {
+        startDate = new Date(input.startDate);
+        startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(input.endDate);
+        endDate.setHours(23, 59, 59, 999);
+      }
+
+      const dateFilter = endDate
+        ? { gte: startDate, lte: endDate }
+        : { gte: startDate };
 
       const orders = await ctx.prisma.order.findMany({
-        where: { createdAt: { gte: startDate } },
+        where: { createdAt: dateFilter },
         include: { items: true }
       });
 
       const grouped: Record<string, number> = {};
       let totalProductsSold = 0;
       
-      orders.forEach(o => {
-        let key = '';
-        if (input.period === 'daily') key = o.createdAt.toLocaleDateString('ar-BH');
+      const getKey = (date: Date) => {
+        if (input.period === 'daily' || input.period === 'custom') return date.toLocaleDateString('ar-BH');
         if (input.period === 'weekly') {
-          const week = Math.ceil(o.createdAt.getDate() / 7);
-          key = `الأسبوع ${week} - ${o.createdAt.toLocaleString('ar-BH', { month: 'short' })}`;
+          const week = Math.ceil(date.getDate() / 7);
+          return `الأسبوع ${week} - ${date.toLocaleString('ar-BH', { month: 'short' })}`;
         }
-        if (input.period === 'monthly') key = o.createdAt.toLocaleString('ar-BH', { month: 'long', year: 'numeric' });
+        if (input.period === 'monthly') return date.toLocaleString('ar-BH', { month: 'long', year: 'numeric' });
         if (input.period === 'quarterly') {
-          const q = Math.ceil((o.createdAt.getMonth() + 1) / 3);
-          key = `الربع ${q} - ${o.createdAt.getFullYear()}`;
+          const q = Math.ceil((date.getMonth() + 1) / 3);
+          return `الربع ${q} - ${date.getFullYear()}`;
         }
+        return date.toLocaleDateString('ar-BH');
+      };
+
+      orders.forEach(o => {
+        const key = getKey(o.createdAt);
         grouped[key] = (grouped[key] || 0) + o.total;
         totalProductsSold += o.items ? o.items.reduce((sum, item) => sum + item.quantity, 0) : 0;
       });
 
+
       // Fetch expenses for the period (moved up so we can use in chartData)
       const expensesList = await ctx.prisma.expense.findMany({
-        where: { date: { gte: startDate } }
+        where: { date: endDate ? { gte: startDate, lte: endDate } : { gte: startDate } }
       });
 
       // Group expenses by the same period key
       const expensesGrouped: Record<string, number> = {};
       expensesList.forEach(e => {
-        let key = '';
-        const d = new Date(e.date);
-        if (input.period === 'daily') key = d.toLocaleDateString('ar-BH');
-        if (input.period === 'weekly') {
-          const week = Math.ceil(d.getDate() / 7);
-          key = `الأسبوع ${week} - ${d.toLocaleString('ar-BH', { month: 'short' })}`;
-        }
-        if (input.period === 'monthly') key = d.toLocaleString('ar-BH', { month: 'long', year: 'numeric' });
-        if (input.period === 'quarterly') {
-          const q = Math.ceil((d.getMonth() + 1) / 3);
-          key = `الربع ${q} - ${d.getFullYear()}`;
-        }
+        const key = getKey(new Date(e.date));
         expensesGrouped[key] = (expensesGrouped[key] || 0) + e.amount;
       });
 
