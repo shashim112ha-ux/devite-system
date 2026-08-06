@@ -53,11 +53,14 @@ export default function ExpensesPage() {
   const utils = trpc.useContext();
   
   const queryParams = { filterType, page, limit: 20, ...(filterType === 'custom' ? { startDate, endDate } : {}) };
+  const printQueryParams = { filterType, page: 1, limit: 10000, ...(filterType === 'custom' ? { startDate, endDate } : {}) };
   
   const { data: expensesResponse, isLoading: loadingExpenses } = trpc.getDetailedExpenses.useQuery(queryParams);
   const expensesList = expensesResponse?.data || [];
   const totalPages = expensesResponse?.totalPages || 1;
   const { data: analytics, isLoading: loadingAnalytics } = trpc.getExpenseAnalytics.useQuery(queryParams);
+  const { data: printExpensesResponse } = trpc.getDetailedExpenses.useQuery(printQueryParams);
+  const printExpensesList = printExpensesResponse?.data || [];
   
   const { data: accountsList } = trpc.getAccounts.useQuery();
   const { data: inventoryList } = trpc.getInventory.useQuery({ limit: 1000 });
@@ -533,8 +536,74 @@ export default function ExpensesPage() {
         </div>
       </div>
 
-      {/* Expenses Table */}
-      <div className="bg-brand-navy border border-white/5 rounded-[30px] overflow-hidden shadow-xl">
+      {/* Print-Only Full Data Section */}
+      <div className="hidden print:block mb-8">
+        <div className="text-center mb-6 border-b pb-4 border-gray-300">
+          <h1 className="text-2xl font-black">Devite System — سجل المصروفات</h1>
+          <p className="text-sm text-gray-600 mt-1">
+            الفترة: {filterType === 'daily' ? 'اليوم' : filterType === 'weekly' ? 'هذا الأسبوع' : filterType === 'monthly' ? 'هذا الشهر' : filterType === 'all' ? 'الكل' : `${startDate} — ${endDate}`}
+            &nbsp;|&nbsp; إجمالي المصروفات: {analytics?.total?.toFixed(3) || '0.000'} د.ب
+            &nbsp;|&nbsp; عدد العمليات: {analytics?.count || 0}
+          </p>
+        </div>
+
+        {/* Analytics Summary for Print */}
+        <div className="grid grid-cols-3 gap-4 mb-6 text-sm">
+          {analytics?.categoryStats?.map((stat: any, index: number) => (
+            <div key={stat.name} className="border border-gray-200 rounded p-3 flex justify-between items-center">
+              <span className="font-bold" style={{ color: COLORS[index % COLORS.length] }}>{stat.name}</span>
+              <span className="font-black">{stat.value.toFixed(3)} د.ب <span className="text-gray-400 font-normal text-xs">({stat.percentage}%)</span></span>
+            </div>
+          ))}
+        </div>
+
+        <table className="w-full text-right text-sm border-collapse">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="p-3 border border-gray-200 whitespace-nowrap">التاريخ</th>
+              <th className="p-3 border border-gray-200">الغرض / المورد</th>
+              <th className="p-3 border border-gray-200">التصنيف</th>
+              <th className="p-3 border border-gray-200">الكمية</th>
+              <th className="p-3 border border-gray-200">سعر الوحدة</th>
+              <th className="p-3 border border-gray-200 font-bold">الإجمالي (د.ب)</th>
+              <th className="p-3 border border-gray-200">طريقة الدفع</th>
+              <th className="p-3 border border-gray-200">الموظف</th>
+            </tr>
+          </thead>
+          <tbody>
+            {printExpensesList.map((expense: any) => (
+              <tr key={expense.id} className="border-b border-gray-100">
+                <td className="p-2 border border-gray-200 whitespace-nowrap text-xs">{new Date(expense.date).toLocaleDateString('ar-SA')}</td>
+                <td className="p-2 border border-gray-200">
+                  <div className="font-bold">{expense.purpose || '—'}</div>
+                  {expense.supplier && <div className="text-xs text-gray-500">المورد: {expense.supplier}</div>}
+                </td>
+                <td className="p-2 border border-gray-200 text-xs">{expense.category}</td>
+                <td className="p-2 border border-gray-200 text-center">{expense.quantity}</td>
+                <td className="p-2 border border-gray-200 text-xs">{expense.unitPrice?.toFixed(3)}</td>
+                <td className="p-2 border border-gray-200 font-black text-center">{expense.amount.toFixed(3)}</td>
+                <td className="p-2 border border-gray-200 text-xs">{expense.paymentMethod}<br/><span className="text-gray-400">{expense.accountPaidFrom || ''}</span></td>
+                <td className="p-2 border border-gray-200 text-xs">{expense.recordedBy?.name || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="bg-gray-100 font-black">
+              <td colSpan={5} className="p-3 border border-gray-200 text-left">الإجمالي الكلي</td>
+              <td className="p-3 border border-gray-200 text-center">{analytics?.total?.toFixed(3) || '0.000'} د.ب</td>
+              <td colSpan={2} className="border border-gray-200"></td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <style type="text/css" media="print">{`
+          @page { size: A4 landscape; margin: 10mm; }
+          body { font-family: Arial, sans-serif; }
+        `}</style>
+      </div>
+
+      {/* Expenses Table (Screen Only) */}
+      <div className="bg-brand-navy border border-white/5 rounded-[30px] overflow-hidden shadow-xl print:hidden">
         <div className="p-6 border-b border-white/5 flex justify-between items-center bg-brand-navy-light/30">
           <h2 className="text-xl font-bold flex items-center gap-3">
             <FileText className="text-brand-orange" /> السجل الكامل للمصروفات
