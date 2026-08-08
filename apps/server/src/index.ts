@@ -22,9 +22,9 @@ process.on('unhandledRejection', (reason, promise) => {
 const app = express();
 app.use(cors());
 
-// Support JSON payloads up to 10MB (for base64 images)
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Support JSON payloads up to 50MB (for base64 PDF/document attachments)
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Serve static uploaded assets
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
