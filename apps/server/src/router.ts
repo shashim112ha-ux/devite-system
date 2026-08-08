@@ -931,6 +931,8 @@ export const appRouter = router({
       });
 
       const grouped: Record<string, number> = {};
+      // Track earliest timestamp per key for chronological sorting
+      const keyTimestamp: Record<string, number> = {};
       let totalProductsSold = 0;
       
       const getKey = (date: Date) => {
@@ -947,9 +949,30 @@ export const appRouter = router({
         return date.toLocaleDateString('ar-BH');
       };
 
+      // Helper to get period-start timestamp for sorting
+      const getSortTs = (date: Date): number => {
+        if (input.period === 'daily' || input.period === 'custom') {
+          return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+        }
+        if (input.period === 'weekly') {
+          const week = Math.ceil(date.getDate() / 7);
+          return new Date(date.getFullYear(), date.getMonth(), (week - 1) * 7 + 1).getTime();
+        }
+        if (input.period === 'monthly') {
+          return new Date(date.getFullYear(), date.getMonth(), 1).getTime();
+        }
+        if (input.period === 'quarterly') {
+          const q = Math.ceil((date.getMonth() + 1) / 3);
+          return new Date(date.getFullYear(), (q - 1) * 3, 1).getTime();
+        }
+        return date.getTime();
+      };
+
       orders.forEach(o => {
         const key = getKey(o.createdAt);
         grouped[key] = (grouped[key] || 0) + o.total;
+        const ts = getSortTs(o.createdAt);
+        if (!keyTimestamp[key] || ts < keyTimestamp[key]) keyTimestamp[key] = ts;
         totalProductsSold += o.items ? o.items.reduce((sum, item) => sum + item.quantity, 0) : 0;
       });
 
@@ -962,12 +985,16 @@ export const appRouter = router({
       // Group expenses by the same period key
       const expensesGrouped: Record<string, number> = {};
       expensesList.forEach(e => {
-        const key = getKey(new Date(e.date));
+        const d = new Date(e.date);
+        const key = getKey(d);
         expensesGrouped[key] = (expensesGrouped[key] || 0) + e.amount;
+        const ts = getSortTs(d);
+        if (!keyTimestamp[key] || ts < keyTimestamp[key]) keyTimestamp[key] = ts;
       });
 
-      // Merge all keys from sales and expenses, build chartData with profit
+      // Merge all keys, sort chronologically by timestamp, build chartData
       const allKeys = Array.from(new Set([...Object.keys(grouped), ...Object.keys(expensesGrouped)]));
+      allKeys.sort((a, b) => (keyTimestamp[a] || 0) - (keyTimestamp[b] || 0));
       const chartData = allKeys.map(name => {
         const salesVal = grouped[name] || 0;
         const expensesVal = expensesGrouped[name] || 0;
