@@ -737,3 +737,21 @@ model DailyTaskCompletion {
   @@index([employeeId])
   @@index([taskTemplateId])
 }
+
+model InvestorReport {
+  id            String   @id @default(cuid())
+  title         String
+  month         String
+  content       String
+  attachments   String?
+  targetType    String   @default("ALL")
+  targetIds     String?
+  sentAt        DateTime @default(now())
+  sentById      String?
+  status        String   @default("SENT")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([month])
+  @@index([sentAt])
+}

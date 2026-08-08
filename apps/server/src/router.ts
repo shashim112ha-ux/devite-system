@@ -3400,6 +3400,57 @@ export const appRouter = router({
       return order;
     }),
 
+  // ===== Investor Reports =====
+  createInvestorReport: adminProcedure
+    .input(z.object({
+      title: z.string(),
+      month: z.string(), // e.g. '2026-08'
+      content: z.string(), // HTML/text summary
+      attachments: z.string().optional(), // JSON array [{name, base64, type}]
+      targetType: z.enum(['ALL', 'SPECIFIC']).default('ALL'),
+      targetIds: z.string().optional(), // JSON array of investor IDs
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const report = await ctx.prisma.investorReport.create({
+        data: {
+          title: input.title,
+          month: input.month,
+          content: input.content,
+          attachments: input.attachments,
+          targetType: input.targetType,
+          targetIds: input.targetIds,
+          sentById: ctx.user?.id,
+          status: 'SENT',
+        }
+      });
+
+      await ctx.prisma.auditLog.create({
+        data: {
+          userId: ctx.user?.id || 'SYSTEM',
+          action: 'INVESTOR_REPORT_SENT',
+          details: `تم إرسال تقرير شهري للمستثمرين: ${input.title} (${input.month})`
+        }
+      });
+
+      return report;
+    }),
+
+  getInvestorReports: investorProcedure
+    .query(async ({ ctx }) => {
+      const reports = await ctx.prisma.investorReport.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      });
+      return reports;
+    }),
+
+  deleteInvestorReport: adminProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      await ctx.prisma.investorReport.delete({ where: { id: input.id } });
+      return { success: true };
+    }),
+
 });
 
 export type AppRouter = typeof appRouter;

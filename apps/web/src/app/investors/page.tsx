@@ -5,7 +5,8 @@ import { trpc } from "../utils/trpc";
 import { 
   Coins, Plus, DollarSign, UserPlus, TrendingUp, CreditCard, 
   PieChart as PieIcon, Users, Percent, UserCheck, ShieldAlert,
-  Calendar, FileSpreadsheet, Eye, ArrowDownRight, Settings
+  Calendar, FileSpreadsheet, Eye, ArrowDownRight, Settings,
+  Send, FileText, Paperclip, Trash2, Download, CheckCircle, X, Loader2
 } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
@@ -28,13 +29,42 @@ export default function InvestorsPage() {
   });
   const investorsQuery = trpc.getInvestors.useQuery();
   const historyQuery = trpc.getProfitDistributionHistory.useQuery();
+  const reportsQuery = trpc.getInvestorReports.useQuery();
 
   const addInvestorMutation = trpc.addInvestor.useMutation();
   const updateInvestorMutation = trpc.updateInvestor.useMutation();
   const withdrawMutation = trpc.withdrawInvestorCapital.useMutation();
   const distributeDeductionsMutation = trpc.distributeProfitWithDeductions.useMutation();
+  const createReportMutation = trpc.createInvestorReport.useMutation({
+    onSuccess: () => {
+      reportsQuery.refetch();
+      setReportTitle("");
+      setReportContent("");
+      setReportAttachments([]);
+      setReportTargetIds([]);
+      setReportTargetType('ALL');
+      setIsSubmittingReport(false);
+      alert("✅ تم إرسال التقرير بنجاح للمستثمرين!");
+    },
+    onError: (err) => { setIsSubmittingReport(false); alert(`خطأ: ${err.message}`); }
+  });
+  const deleteReportMutation = trpc.deleteInvestorReport.useMutation({
+    onSuccess: () => reportsQuery.refetch()
+  });
 
-  const [activeTab, setActiveTab] = useState<"list" | "smart" | "history">("list");
+  const [activeTab, setActiveTab] = useState<"list" | "smart" | "history" | "reports">("list");
+
+  // Reports tab state
+  const [reportTitle, setReportTitle] = useState("");
+  const [reportMonth, setReportMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const [reportContent, setReportContent] = useState("");
+  const [reportTargetType, setReportTargetType] = useState<'ALL' | 'SPECIFIC'>('ALL');
+  const [reportTargetIds, setReportTargetIds] = useState<string[]>([]);
+  const [reportAttachments, setReportAttachments] = useState<{name: string; base64: string; type: string}[]>([]);
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
 
   // Modal open states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -279,7 +309,51 @@ export default function InvestorsPage() {
                  </table>
               )}
            </div>
-        </div>
+
+            {/* Reports for this investor */}
+            <h2 className="text-xl font-bold mt-10 mb-4 flex items-center gap-2"><FileText size={20} className="text-brand-gold"/> التقارير الشهرية</h2>
+            <div className="bg-brand-navy border border-white/5 rounded-2xl shadow-lg overflow-hidden">
+              {reportsQuery.isLoading ? (
+                <div className="p-10 text-center text-brand-orange animate-pulse">جاري تحميل التقارير...</div>
+              ) : !reportsQuery.data || reportsQuery.data.filter((r: any) => {
+                  if (r.targetType === 'ALL') return true;
+                  try { return JSON.parse(r.targetIds || '[]').includes(data?.id); } catch { return false; }
+                }).length === 0 ? (
+                <div className="p-10 text-center text-gray-500">لا توجد تقارير متاحة بعد</div>
+              ) : (
+                <div className="divide-y divide-white/5">
+                  {reportsQuery.data.filter((r: any) => {
+                    if (r.targetType === 'ALL') return true;
+                    try { return JSON.parse(r.targetIds || '[]').includes(data?.id); } catch { return false; }
+                  }).map((report: any) => {
+                    const atts = report.attachments ? JSON.parse(report.attachments) : [];
+                    return (
+                      <div key={report.id} className="p-5">
+                        <div className="flex items-center gap-2 flex-wrap mb-2">
+                          <span className="font-black text-white">{report.title}</span>
+                          <span className="text-xs bg-brand-gold/10 text-brand-gold border border-brand-gold/20 px-2 py-0.5 rounded-full">{report.month}</span>
+                        </div>
+                        <p className="text-sm text-gray-400 mb-3 whitespace-pre-wrap">{report.content}</p>
+                        {atts.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {atts.map((att: any, i: number) => (
+                              <a key={i} href={att.base64} download={att.name}
+                                className="flex items-center gap-1.5 text-xs bg-white/5 hover:bg-white/10 border border-white/10 px-3 py-1.5 rounded-lg text-gray-300 transition-colors">
+                                <Download size={12} className="text-brand-gold" /> {att.name}
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                        <p className="text-xs text-gray-600 mt-3">
+                          {new Date(report.sentAt).toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' })}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+         </div>
      );
   }
 
@@ -336,6 +410,14 @@ export default function InvestorsPage() {
           }`}
         >
           أرشيف توزيع الأرباح
+        </button>
+        <button
+          onClick={() => setActiveTab("reports")}
+          className={`pb-4 text-sm font-bold transition-all flex items-center gap-2 ${
+            activeTab === "reports" ? "text-brand-orange border-b-2 border-brand-orange" : "text-gray-400 hover:text-white"
+          }`}
+        >
+          <Send size={14} /> التقارير الشهرية للمستثمرين
         </button>
       </div>
 
@@ -603,6 +685,242 @@ export default function InvestorsPage() {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ===== Reports Tab ===== */}
+      {activeTab === "reports" && (
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+          {/* Left: Create Report Form */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="bg-brand-navy border border-white/5 rounded-2xl overflow-hidden shadow-2xl">
+              <div className="p-6 border-b border-white/5 bg-brand-navy/80">
+                <h3 className="font-black text-lg flex items-center gap-2">
+                  <Send className="text-brand-orange" size={18} /> إنشاء تقرير شهري جديد
+                </h3>
+                <p className="text-xs text-gray-500 mt-1">سيُحفظ التقرير ويُتاح للمستثمرين المحددين للاطلاع عليه</p>
+              </div>
+              <div className="p-6 space-y-5">
+                {/* Title */}
+                <div>
+                  <label className="text-xs text-gray-400 font-bold block mb-2">📌 عنوان التقرير *</label>
+                  <input
+                    type="text"
+                    value={reportTitle}
+                    onChange={e => setReportTitle(e.target.value)}
+                    placeholder="مثال: تقرير الأداء الشهري - أغسطس 2026"
+                    className="w-full bg-brand-black border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-brand-orange"
+                  />
+                </div>
+
+                {/* Month */}
+                <div>
+                  <label className="text-xs text-gray-400 font-bold block mb-2">📅 الشهر المرجعي *</label>
+                  <input
+                    type="month"
+                    value={reportMonth}
+                    onChange={e => setReportMonth(e.target.value)}
+                    className="w-full bg-brand-black border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-brand-orange"
+                  />
+                </div>
+
+                {/* Content */}
+                <div>
+                  <label className="text-xs text-gray-400 font-bold block mb-2">📝 ملخص / محتوى التقرير *</label>
+                  <textarea
+                    rows={6}
+                    value={reportContent}
+                    onChange={e => setReportContent(e.target.value)}
+                    placeholder="اكتب ملخص التقرير هنا: المبيعات، الأرباح، التحديثات، الخطط المستقبلية..."
+                    className="w-full bg-brand-black border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-brand-orange resize-none"
+                  />
+                </div>
+
+                {/* Target */}
+                <div>
+                  <label className="text-xs text-gray-400 font-bold block mb-2">🎯 المستهدفون</label>
+                  <div className="flex gap-2 mb-3">
+                    <button
+                      onClick={() => setReportTargetType('ALL')}
+                      className={`flex-1 py-2 rounded-xl text-sm font-bold border transition-all ${reportTargetType === 'ALL' ? 'bg-brand-orange text-black border-brand-orange' : 'bg-brand-black border-white/10 text-gray-400 hover:border-white/30'}`}
+                    >
+                      جميع المستثمرين
+                    </button>
+                    <button
+                      onClick={() => setReportTargetType('SPECIFIC')}
+                      className={`flex-1 py-2 rounded-xl text-sm font-bold border transition-all ${reportTargetType === 'SPECIFIC' ? 'bg-brand-orange text-black border-brand-orange' : 'bg-brand-black border-white/10 text-gray-400 hover:border-white/30'}`}
+                    >
+                      محددون
+                    </button>
+                  </div>
+                  {reportTargetType === 'SPECIFIC' && investorsQuery.data && investorsQuery.data.length > 0 && (
+                    <div className="space-y-2 max-h-40 overflow-y-auto bg-brand-black/50 p-3 rounded-xl border border-white/5">
+                      {investorsQuery.data.map((inv: any) => (
+                        <label key={inv.id} className="flex items-center gap-3 cursor-pointer hover:bg-white/5 p-2 rounded-lg transition-colors">
+                          <input
+                            type="checkbox"
+                            checked={reportTargetIds.includes(inv.id)}
+                            onChange={e => {
+                              if (e.target.checked) setReportTargetIds(prev => [...prev, inv.id]);
+                              else setReportTargetIds(prev => prev.filter(id => id !== inv.id));
+                            }}
+                            className="w-4 h-4 accent-brand-orange"
+                          />
+                          <span className="text-sm text-white">{inv.name}</span>
+                          <span className="text-xs text-gray-500 mr-auto">{inv.sharePercentage}%</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Attachments */}
+                <div>
+                  <label className="text-xs text-gray-400 font-bold block mb-2">📎 المرفقات (PDF، صور، مستندات)</label>
+                  <label className="w-full cursor-pointer flex flex-col items-center justify-center gap-2 border-2 border-dashed border-white/10 hover:border-brand-orange/50 rounded-xl p-5 transition-all bg-brand-black/30 hover:bg-brand-orange/5">
+                    <Paperclip size={22} className="text-gray-500" />
+                    <span className="text-sm text-gray-400">اضغط لرفع الملفات</span>
+                    <span className="text-xs text-gray-600">PDF, PNG, JPG, DOCX — بحد أقصى 5 ملفات</span>
+                    <input
+                      type="file"
+                      multiple
+                      accept=".pdf,.png,.jpg,.jpeg,.docx,.xlsx"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const files = Array.from(e.target.files || []);
+                        if (files.length + reportAttachments.length > 5) {
+                          alert("الحد الأقصى 5 ملفات");
+                          return;
+                        }
+                        const newAttachments = await Promise.all(files.map(file => new Promise<{name: string; base64: string; type: string}>((resolve) => {
+                          const reader = new FileReader();
+                          reader.onload = () => resolve({ name: file.name, base64: reader.result as string, type: file.type });
+                          reader.readAsDataURL(file);
+                        })));
+                        setReportAttachments(prev => [...prev, ...newAttachments]);
+                      }}
+                    />
+                  </label>
+                  {reportAttachments.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      {reportAttachments.map((att, i) => (
+                        <div key={i} className="flex items-center gap-3 bg-brand-black/50 border border-white/5 rounded-xl px-3 py-2">
+                          <FileText size={16} className="text-brand-orange flex-shrink-0" />
+                          <span className="text-xs text-gray-300 flex-1 truncate">{att.name}</span>
+                          <button onClick={() => setReportAttachments(prev => prev.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-300">
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Submit */}
+                <button
+                  onClick={() => {
+                    if (!reportTitle.trim()) { alert("يرجى إدخال عنوان التقرير"); return; }
+                    if (!reportContent.trim()) { alert("يرجى كتابة محتوى التقرير"); return; }
+                    if (reportTargetType === 'SPECIFIC' && reportTargetIds.length === 0) { alert("يرجى تحديد مستثمر واحد على الأقل"); return; }
+                    setIsSubmittingReport(true);
+                    createReportMutation.mutate({
+                      title: reportTitle,
+                      month: reportMonth,
+                      content: reportContent,
+                      targetType: reportTargetType,
+                      targetIds: reportTargetType === 'SPECIFIC' ? JSON.stringify(reportTargetIds) : undefined,
+                      attachments: reportAttachments.length > 0 ? JSON.stringify(reportAttachments.map(a => ({ name: a.name, type: a.type, base64: a.base64 }))) : undefined,
+                    });
+                  }}
+                  disabled={isSubmittingReport || createReportMutation.isLoading}
+                  className="w-full bg-gradient-to-r from-brand-orange to-brand-gold text-black font-black py-3.5 rounded-xl hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-brand-orange/20"
+                >
+                  {isSubmittingReport ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+                  {isSubmittingReport ? 'جاري الإرسال...' : 'إرسال التقرير للمستثمرين'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Right: Reports History */}
+          <div className="lg:col-span-3 space-y-4">
+            <div className="bg-brand-navy border border-white/5 rounded-2xl overflow-hidden shadow-2xl">
+              <div className="p-6 border-b border-white/5 bg-brand-navy/80 flex justify-between items-center">
+                <h3 className="font-black text-lg flex items-center gap-2">
+                  <FileText className="text-brand-gold" size={18} /> أرشيف التقارير المُرسلة
+                </h3>
+                <span className="text-xs bg-brand-orange/10 text-brand-orange border border-brand-orange/20 px-3 py-1 rounded-full font-bold">
+                  {reportsQuery.data?.length || 0} تقرير
+                </span>
+              </div>
+
+              {reportsQuery.isLoading ? (
+                <div className="p-16 text-center text-brand-orange animate-pulse">جاري التحميل...</div>
+              ) : !reportsQuery.data || reportsQuery.data.length === 0 ? (
+                <div className="p-16 text-center">
+                  <FileText size={48} className="mx-auto mb-4 text-gray-700" />
+                  <p className="text-gray-500 font-bold">لم يُرسل أي تقرير بعد</p>
+                  <p className="text-gray-600 text-sm mt-1">قم بإنشاء أول تقرير شهري للمستثمرين</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-white/5">
+                  {reportsQuery.data.map((report: any) => {
+                    const attachments = report.attachments ? JSON.parse(report.attachments) : [];
+                    const targetIds = report.targetIds ? JSON.parse(report.targetIds) : [];
+                    return (
+                      <div key={report.id} className="p-5 hover:bg-white/[0.02] transition-colors group">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            {/* Header */}
+                            <div className="flex items-center gap-2 flex-wrap mb-2">
+                              <span className="font-black text-white text-sm">{report.title}</span>
+                              <span className="text-xs bg-brand-gold/10 text-brand-gold border border-brand-gold/20 px-2 py-0.5 rounded-full">{report.month}</span>
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${report.targetType === 'ALL' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'}`}>
+                                {report.targetType === 'ALL' ? '📢 الكل' : `👥 ${targetIds.length} مستثمر`}
+                              </span>
+                            </div>
+                            {/* Content preview */}
+                            <p className="text-xs text-gray-400 line-clamp-2 mb-3">{report.content}</p>
+                            {/* Attachments */}
+                            {attachments.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mb-2">
+                                {attachments.map((att: any, i: number) => (
+                                  <a
+                                    key={i}
+                                    href={att.base64}
+                                    download={att.name}
+                                    className="flex items-center gap-1.5 text-xs bg-white/5 hover:bg-white/10 border border-white/10 px-2 py-1 rounded-lg transition-colors text-gray-300"
+                                  >
+                                    <Download size={12} className="text-brand-gold" />
+                                    {att.name}
+                                  </a>
+                                ))}
+                              </div>
+                            )}
+                            {/* Date */}
+                            <p className="text-xs text-gray-600">
+                              أُرسل في {new Date(report.sentAt).toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          </div>
+                          {/* Delete */}
+                          <button
+                            onClick={() => {
+                              if (confirm('هل تريد حذف هذا التقرير؟')) {
+                                deleteReportMutation.mutate({ id: report.id });
+                              }
+                            }}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity p-2 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 flex-shrink-0"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
