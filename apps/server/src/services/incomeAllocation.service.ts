@@ -94,12 +94,50 @@ async function recordTx(p: any) {
 }
 
 export async function ensureAllocationDay(bd: Date, prisma: any) {
-  const ex = await prisma.incomeAllocationDay.findUnique({ where: { businessDate: bd }, include: { transactions: true } });
-  if (ex) return ex;
-  const [prev, rule, gross] = await Promise.all([
+  let ex = await prisma.incomeAllocationDay.findUnique({ where: { businessDate: bd }, include: { transactions: true } });
+  const gross = await getEligibleIncomeForDate(bd, prisma);
+  
+  if (ex) {
+    const delta = f3(gross - ex.grossEligibleIncome);
+    if (delta > 0) {
+      const pA = f3(delta * ex.purchasePct / 100);
+      const mA = f3(delta * ex.maintenancePct / 100);
+      const lA = f3(delta * ex.laborPct / 100);
+      const cA = f3(delta * ex.capitalPct / 100);
+      
+      const items = [
+        { bucket: 'PURCHASE_DEVELOPMENT', amount: pA },
+        { bucket: 'MAINTENANCE', amount: mA },
+        { bucket: 'LABOR', amount: lA },
+        { bucket: 'CAPITAL', amount: cA },
+      ];
+      for (const b of items) {
+        if (b.amount <= 0) continue;
+        await recordTx({
+          prisma, dayId: ex.id, bucket: b.bucket, type: 'DAILY_ALLOCATION', dir: 'CREDIT',
+          amount: b.amount, date: bd, desc: `تحديث مبيعات`,
+          entityType: 'ALLOCATION_DAY', entityId: ex.id + '_upd_' + Date.now()
+        });
+      }
+      
+      await prisma.incomeAllocationDay.update({
+        where: { id: ex.id },
+        data: {
+          grossEligibleIncome: gross,
+          purchaseAllocated: f3(ex.purchaseAllocated + pA),
+          maintenanceAllocated: f3(ex.maintenanceAllocated + mA),
+          laborAllocated: f3(ex.laborAllocated + lA),
+          capitalAllocated: f3(ex.capitalAllocated + cA),
+        }
+      });
+      ex = await prisma.incomeAllocationDay.findUnique({ where: { id: ex.id }, include: { transactions: true } });
+    }
+    return ex;
+  }
+  
+  const [prev, rule] = await Promise.all([
     getPrevBalances(bd, prisma),
     getActiveRule(bd, prisma),
-    getEligibleIncomeForDate(bd, prisma),
   ]);
   const pA = f3(gross * rule.purchasePct / 100);
   const mA = f3(gross * rule.maintenancePct / 100);
