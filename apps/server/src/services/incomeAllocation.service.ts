@@ -238,6 +238,55 @@ export async function getAllocationSummary(params: any) {
       else if (tx.transactionType === 'REVERSAL') { if (tx.direction === 'CREDIT') b.spent -= tx.amount; else b.spent += tx.amount; }
     }
   }
+
+  // Dynamic live projection for today
+  const today = toBusinessDate(new Date());
+  if (to.getTime() >= today.getTime() && from.getTime() <= today.getTime()) {
+    const liveGross = await getEligibleIncomeForDate(today, prisma);
+    const dayRecord = days.find((d: any) => d.businessDate.getTime() === today.getTime());
+    const allocatedSoFar = dayRecord ? dayRecord.grossEligibleIncome : 0;
+    const unallocated = f3(liveGross - allocatedSoFar);
+    
+    if (unallocated > 0) {
+      const rule = await getActiveRule(today, prisma);
+      totalIncome += unallocated;
+      
+      const pA = f3(unallocated * rule.purchasePct / 100);
+      const mA = f3(unallocated * rule.maintenancePct / 100);
+      const lA = f3(unallocated * rule.laborPct / 100);
+      const cA = f3(unallocated * rule.capitalPct / 100);
+      
+      buckets.PURCHASE_DEVELOPMENT.allocated += pA;
+      buckets.MAINTENANCE.allocated += mA;
+      buckets.LABOR.allocated += lA;
+      buckets.CAPITAL.allocated += cA;
+      
+      closing.purchase = f3(closing.purchase + pA);
+      closing.maintenance = f3(closing.maintenance + mA);
+      closing.labor = f3(closing.labor + lA);
+      closing.capital = f3(closing.capital + cA);
+      
+      if (dayRecord) {
+        dayRecord.grossEligibleIncome = liveGross;
+        dayRecord.purchaseAllocated = f3(dayRecord.purchaseAllocated + pA);
+        dayRecord.maintenanceAllocated = f3(dayRecord.maintenanceAllocated + mA);
+        dayRecord.laborAllocated = f3(dayRecord.laborAllocated + lA);
+        dayRecord.capitalAllocated = f3(dayRecord.capitalAllocated + cA);
+        dayRecord.purchaseClosingBal = f3(dayRecord.purchaseClosingBal + pA);
+        dayRecord.maintenanceClosingBal = f3(dayRecord.maintenanceClosingBal + mA);
+        dayRecord.laborClosingBal = f3(dayRecord.laborClosingBal + lA);
+        dayRecord.capitalClosingBal = f3(dayRecord.capitalClosingBal + cA);
+      } else {
+        // If no day record exists yet, just project it visually
+        days.push({
+          id: 'live_projection', businessDate: today, grossEligibleIncome: liveGross, status: 'OPEN',
+          purchaseAllocated: pA, maintenanceAllocated: mA, laborAllocated: lA, capitalAllocated: cA,
+          purchaseClosingBal: closing.purchase, maintenanceClosingBal: closing.maintenance, laborClosingBal: closing.labor, capitalClosingBal: closing.capital
+        });
+      }
+    }
+  }
+
   return { totalIncome, openingBalances: opening, closingBalances: closing, buckets, days: days.map((d: any) => ({ id: d.id, businessDate: d.businessDate, grossEligibleIncome: d.grossEligibleIncome, status: d.status, purchaseAllocated: d.purchaseAllocated, maintenanceAllocated: d.maintenanceAllocated, laborAllocated: d.laborAllocated, capitalAllocated: d.capitalAllocated, purchaseClosingBal: d.purchaseClosingBal, maintenanceClosingBal: d.maintenanceClosingBal, laborClosingBal: d.laborClosingBal, capitalClosingBal: d.capitalClosingBal })) };
 }
-// Trigger Railway deployment 1
+// Trigger Railway deployment 2
