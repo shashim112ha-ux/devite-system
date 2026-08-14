@@ -1,4 +1,4 @@
-﻿export const BUCKET_LABELS: Record<string, string> = {
+export const BUCKET_LABELS: Record<string, string> = {
   PURCHASE_DEVELOPMENT: 'التطوير والمشتريات والتشغيل',
   MAINTENANCE: 'الصيانة',
   LABOR: 'العمال',
@@ -202,3 +202,4 @@ export async function getAllocationSummary(params: any) {
   }
   return { totalIncome, openingBalances: opening, closingBalances: closing, buckets, days: days.map((d: any) => ({ id: d.id, businessDate: d.businessDate, grossEligibleIncome: d.grossEligibleIncome, status: d.status, purchaseAllocated: d.purchaseAllocated, maintenanceAllocated: d.maintenanceAllocated, laborAllocated: d.laborAllocated, capitalAllocated: d.capitalAllocated, purchaseClosingBal: d.purchaseClosingBal, maintenanceClosingBal: d.maintenanceClosingBal, laborClosingBal: d.laborClosingBal, capitalClosingBal: d.capitalClosingBal })) };
 }
+// Trigger Railway deployment 1

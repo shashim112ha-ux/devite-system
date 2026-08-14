@@ -846,3 +846,4 @@ model IncomeAllocationTransaction {
   @@index([transactionType])
   @@index([createdAt])
 }
+// Trigger Railway deployment 1
