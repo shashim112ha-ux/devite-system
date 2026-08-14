@@ -18,6 +18,21 @@ import {
 } from './trpc';
 import { io } from './index';
 import { queueWhatsAppMessage, DEFAULT_TEMPLATES, generateShiftReportPDF, fillTemplate, getWhatsAppState, restartWhatsApp, lastWorkerRunTime, isProcessingQueue } from './services/whatsapp';
+import {
+  getActiveRule,
+  ensureAllocationDay,
+  getEligibleIncomeForDate,
+  getBucketBalance,
+  createExpenseAllocation,
+  createPayrollAllocation,
+  createProfitDistributionAllocation,
+  createManualAdjustment,
+  reverseAllocationTransaction,
+  getAllocationSummary,
+  toBusinessDate,
+  BUCKET_LABELS,
+  type Bucket,
+} from './services/incomeAllocation.service';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'devite_super_secret_key';
 
@@ -1777,6 +1792,22 @@ export const appRouter = router({
         await logAudit(tx, ctx.user.id, 'PROFIT_DISTRIBUTION_WITH_DEDUCTIONS', `توزيع أرباح بقيمة ${input.netProfit} د.ب مع استقطاعات ${totalDeductions} د.ب`);
         return distribution;
       });
+      // Income Allocation — CAPITAL bucket (يتجاهل الخطأ حتى لا يكسر عملية التوزيع)
+      const distResult = await ctx.prisma.profitDistribution.findFirst({ orderBy: { date: 'desc' } });
+      if (distResult) {
+        try {
+          await createProfitDistributionAllocation({
+            distributionId: distResult.id,
+            amount: distResult.distributableProfit,
+            businessDate: distResult.date,
+            createdByUserId: ctx.user.id,
+            prisma: ctx.prisma,
+          });
+        } catch (allocationErr) {
+          console.error('[IncomeAllocation] distributeProfitWithDeductions integration error:', allocationErr);
+        }
+      }
+      return distResult;
     }),
 
   getInvestorPayouts: publicProcedure
@@ -2013,6 +2044,19 @@ export const appRouter = router({
         }
       });
       await logAudit(ctx.prisma, ctx.user.id, 'PAY_SALARY', `تسجيل دفع الراتب للموظف ${user?.name || ''} بقيمة ${payroll.netSalary} د.ب من ${accountName}`);
+      // Income Allocation — LABOR bucket (يتجاهل الخطأ حتى لا يكسر paySalary)
+      try {
+        await createPayrollAllocation({
+          payrollId: payroll.id,
+          amount: payroll.netSalary,
+          businessDate: payroll.paymentDate || new Date(),
+          employeeName: user?.name || '',
+          createdByUserId: ctx.user.id,
+          prisma: ctx.prisma,
+        });
+      } catch (allocationErr) {
+        console.error('[IncomeAllocation] paySalary integration error:', allocationErr);
+      }
       return payroll;
     }),
 
@@ -3477,6 +3521,189 @@ export const appRouter = router({
       await ctx.prisma.investorReport.delete({ where: { id: input.id } });
       return { success: true };
     }),
+
+  // ===== Income Allocation System =====
+
+  // جلب الإعدادات (النسب) النشطة
+  getIncomeAllocationRules: managerProcedure.query(async ({ ctx }) => {
+    const rules = await ctx.prisma.incomeAllocationRule.findMany({ orderBy: { effectiveFrom: 'desc' }, take: 10 });
+    return rules;
+  }),
+
+  // تحديث النسب (ينشئ version جديد)
+  updateIncomeAllocationRules: managerProcedure
+    .input(z.object({
+      purchasePct: z.number().min(0).max(100),
+      maintenancePct: z.number().min(0).max(100),
+      laborPct: z.number().min(0).max(100),
+      capitalPct: z.number().min(0).max(100),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const total = input.purchasePct + input.maintenancePct + input.laborPct + input.capitalPct;
+      if (Math.abs(total - 100) > 0.001) throw new TRPCError({ code: 'BAD_REQUEST', message: 'يجب أن يكون مجموع النسب 100%' });
+      // أغلق الـ rule الحالية
+      const now = new Date();
+      await ctx.prisma.incomeAllocationRule.updateMany({ where: { effectiveTo: null }, data: { effectiveTo: now } });
+      // أنشئ rule جديد
+      const rule = await ctx.prisma.incomeAllocationRule.create({
+        data: { ...input, effectiveFrom: now, createdBy: ctx.user.id }
+      });
+      await logAudit(ctx.prisma, ctx.user.id, 'ALLOCATION_RULE_CHANGED',
+        `تغيير نسب توزيع الدخل: ${input.purchasePct}/${input.maintenancePct}/${input.laborPct}/${input.capitalPct}%`);
+      return rule;
+    }),
+
+  // تفعيل النظام لأول مرة
+  initIncomeAllocation: managerProcedure
+    .input(z.object({
+      purchasePct: z.number().min(0).max(100).default(40),
+      maintenancePct: z.number().min(0).max(100).default(10),
+      laborPct: z.number().min(0).max(100).default(30),
+      capitalPct: z.number().min(0).max(100).default(20),
+      effectiveFrom: z.string(), // ISO date string
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const total = input.purchasePct + input.maintenancePct + input.laborPct + input.capitalPct;
+      if (Math.abs(total - 100) > 0.001) throw new TRPCError({ code: 'BAD_REQUEST', message: 'يجب أن يكون مجموع النسب 100%' });
+      const existing = await ctx.prisma.incomeAllocationRule.count();
+      if (existing > 0) throw new TRPCError({ code: 'CONFLICT', message: 'النظام مفعّل مسبقاً' });
+      const rule = await ctx.prisma.incomeAllocationRule.create({
+        data: { purchasePct: input.purchasePct, maintenancePct: input.maintenancePct, laborPct: input.laborPct, capitalPct: input.capitalPct, effectiveFrom: new Date(input.effectiveFrom), createdBy: ctx.user.id }
+      });
+      await logAudit(ctx.prisma, ctx.user.id, 'ALLOCATION_RULE_CHANGED', `تفعيل نظام توزيع الدخل بنسب ${input.purchasePct}/${input.maintenancePct}/${input.laborPct}/${input.capitalPct}%`);
+      return rule;
+    }),
+
+  // ملخص الفترة
+  getIncomeAllocationSummary: managerProcedure
+    .input(z.object({
+      from: z.string(),
+      to: z.string(),
+    }))
+    .query(async ({ input, ctx }) => {
+      const from = toBusinessDate(new Date(input.from));
+      const to = new Date(input.to); to.setHours(23, 59, 59, 999);
+      return getAllocationSummary({ from, to, prisma: ctx.prisma });
+    }),
+
+  // قائمة الأيام
+  getIncomeAllocationDays: managerProcedure
+    .input(z.object({
+      from: z.string(),
+      to: z.string(),
+      page: z.number().default(1),
+      limit: z.number().default(30),
+    }))
+    .query(async ({ input, ctx }) => {
+      const from = toBusinessDate(new Date(input.from));
+      const to = new Date(input.to); to.setHours(23, 59, 59, 999);
+      const skip = (input.page - 1) * input.limit;
+      const [data, total] = await Promise.all([
+        ctx.prisma.incomeAllocationDay.findMany({ where: { businessDate: { gte: from, lte: to } }, orderBy: { businessDate: 'desc' }, take: input.limit, skip }),
+        ctx.prisma.incomeAllocationDay.count({ where: { businessDate: { gte: from, lte: to } } }),
+      ]);
+      return { data, total, page: input.page, totalPages: Math.ceil(total / input.limit) };
+    }),
+
+  // تفاصيل يوم
+  getIncomeAllocationDay: managerProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ input, ctx }) => {
+      return ctx.prisma.incomeAllocationDay.findUnique({ where: { id: input.id }, include: { transactions: { orderBy: { createdAt: 'asc' } } } });
+    }),
+
+  // تشغيل اليوم الحالي (إنشاء snapshot إذا لم يكن موجوداً)
+  ensureTodayAllocation: managerProcedure.mutation(async ({ ctx }) => {
+    const today = toBusinessDate(new Date());
+    return ensureAllocationDay(today, ctx.prisma);
+  }),
+
+  // Ledger الحركات
+  getIncomeAllocationLedger: managerProcedure
+    .input(z.object({
+      from: z.string(),
+      to: z.string(),
+      bucket: z.string().optional(),
+      transactionType: z.string().optional(),
+      page: z.number().default(1),
+      limit: z.number().default(50),
+    }))
+    .query(async ({ input, ctx }) => {
+      const from = toBusinessDate(new Date(input.from));
+      const to = new Date(input.to); to.setHours(23, 59, 59, 999);
+      const where: any = { businessDate: { gte: from, lte: to } };
+      if (input.bucket) where.bucket = input.bucket;
+      if (input.transactionType) where.transactionType = input.transactionType;
+      const skip = (input.page - 1) * input.limit;
+      const [data, total] = await Promise.all([
+        ctx.prisma.incomeAllocationTransaction.findMany({ where, orderBy: { createdAt: 'desc' }, take: input.limit, skip }),
+        ctx.prisma.incomeAllocationTransaction.count({ where }),
+      ]);
+      return { data, total, page: input.page, totalPages: Math.ceil(total / input.limit) };
+    }),
+
+  // تعديل يدوي
+  createIncomeAllocationAdjustment: managerProcedure
+    .input(z.object({
+      bucket: z.enum(['PURCHASE_DEVELOPMENT', 'MAINTENANCE', 'LABOR', 'CAPITAL']),
+      direction: z.enum(['CREDIT', 'DEBIT']),
+      amount: z.number().positive(),
+      reason: z.string().min(1, 'السبب مطلوب'),
+      note: z.string().optional(),
+      businessDate: z.string(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const tx = await createManualAdjustment({
+        bucket: input.bucket as Bucket,
+        direction: input.direction,
+        amount: input.amount,
+        reason: input.reason,
+        note: input.note,
+        businessDate: new Date(input.businessDate),
+        createdByUserId: ctx.user.id,
+        prisma: ctx.prisma,
+      });
+      await logAudit(ctx.prisma, ctx.user.id, 'ALLOCATION_MANUAL_ADJUSTMENT',
+        `تعديل يدوي: ${BUCKET_LABELS[input.bucket as Bucket]} | ${input.direction === 'CREDIT' ? '+' : '-'}${input.amount} د.ب | ${input.reason}`);
+      return tx;
+    }),
+
+  // عكس حركة
+  reverseIncomeAllocationTransaction: managerProcedure
+    .input(z.object({
+      transactionId: z.string(),
+      reason: z.string().min(1),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const reversal = await reverseAllocationTransaction({
+        originalTransactionId: input.transactionId,
+        reason: input.reason,
+        createdByUserId: ctx.user.id,
+        prisma: ctx.prisma,
+      });
+      await logAudit(ctx.prisma, ctx.user.id, 'ALLOCATION_REVERSAL', `عكس حركة: ${input.transactionId} | ${input.reason}`);
+      return reversal;
+    }),
+
+  // الرصيد الحالي لكل الـ buckets
+  getCurrentAllocationBalances: managerProcedure.query(async ({ ctx }) => {
+    const today = toBusinessDate(new Date());
+    const day = await ctx.prisma.incomeAllocationDay.findFirst({ where: { businessDate: { lte: new Date() } }, orderBy: { businessDate: 'desc' } });
+    const liveIncome = await getEligibleIncomeForDate(today, ctx.prisma);
+    const rule = await getActiveRule(today, ctx.prisma);
+    return {
+      hasData: !!day,
+      liveIncomeToday: liveIncome,
+      rule,
+      balances: day ? {
+        purchase: day.purchaseClosingBal,
+        maintenance: day.maintenanceClosingBal,
+        labor: day.laborClosingBal,
+        capital: day.capitalClosingBal,
+      } : { purchase: 0, maintenance: 0, labor: 0, capital: 0 },
+    };
+  }),
 
 });
 

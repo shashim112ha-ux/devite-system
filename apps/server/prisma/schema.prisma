@@ -299,6 +299,9 @@ model Expense {
   branchId String?
   branch   BranchLocation? @relation(fields: [branchId], references: [id])
 
+  // Income Allocation System — ربط اختياري بالقسم المحاسبي
+  allocationBucket String? // PURCHASE_DEVELOPMENT, MAINTENANCE, LABOR, CAPITAL
+
   @@index([date])
   @@index([category])
   @@index([accountId])
@@ -754,4 +757,92 @@ model InvestorReport {
 
   @@index([month])
   @@index([sentAt])
+}
+
+// ===== Income Allocation System =====
+// طبقة محاسبية داخلية مستقلة — لا تؤثر على أي Account.balance
+
+// قواعد النسب مع Versioning — يحفظ تاريخ التغيير
+model IncomeAllocationRule {
+  id             String    @id @default(cuid())
+  purchasePct    Float     @default(40)
+  maintenancePct Float     @default(10)
+  laborPct       Float     @default(30)
+  capitalPct     Float     @default(20)
+  effectiveFrom  DateTime  @default(now())
+  effectiveTo    DateTime?
+  createdBy      String
+  notes          String?
+  createdAt      DateTime  @default(now())
+
+  @@index([effectiveFrom])
+}
+
+// Snapshot يومي — مستقل تماماً
+model IncomeAllocationDay {
+  id                    String   @id @default(cuid())
+  businessDate          DateTime @unique
+  status                String   @default("OPEN")
+
+  grossEligibleIncome   Float    @default(0)
+
+  purchaseOpeningBal    Float    @default(0)
+  maintenanceOpeningBal Float    @default(0)
+  laborOpeningBal       Float    @default(0)
+  capitalOpeningBal     Float    @default(0)
+
+  purchasePct           Float    @default(40)
+  maintenancePct        Float    @default(10)
+  laborPct              Float    @default(30)
+  capitalPct            Float    @default(20)
+
+  purchaseAllocated     Float    @default(0)
+  maintenanceAllocated  Float    @default(0)
+  laborAllocated        Float    @default(0)
+  capitalAllocated      Float    @default(0)
+
+  purchaseClosingBal    Float    @default(0)
+  maintenanceClosingBal Float    @default(0)
+  laborClosingBal       Float    @default(0)
+  capitalClosingBal     Float    @default(0)
+
+  ruleId    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions IncomeAllocationTransaction[]
+
+  @@index([businessDate])
+  @@index([status])
+}
+
+// سجل حركات الـ Ledger الكامل
+model IncomeAllocationTransaction {
+  id              String   @id @default(cuid())
+  allocationDayId String
+  allocationDay   IncomeAllocationDay @relation(fields: [allocationDayId], references: [id])
+
+  bucket          String   // PURCHASE_DEVELOPMENT, MAINTENANCE, LABOR, CAPITAL
+  transactionType String   // DAILY_ALLOCATION, EXPENSE, PAYROLL, PROFIT_DISTRIBUTION, MANUAL_ADJUSTMENT, REVERSAL
+  direction       String   // CREDIT, DEBIT
+  amount          Float
+  balanceAfter    Float
+
+  businessDate    DateTime
+  description     String
+
+  relatedEntityType String?
+  relatedEntityId   String?
+  reversalOfId      String?
+
+  note            String?
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+
+  @@unique([relatedEntityType, relatedEntityId, bucket, transactionType], name: "unique_entity_allocation")
+  @@index([allocationDayId])
+  @@index([bucket, businessDate])
+  @@index([relatedEntityType, relatedEntityId])
+  @@index([transactionType])
+  @@index([createdAt])
 }

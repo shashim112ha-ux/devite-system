@@ -26,7 +26,8 @@ import {
   Menu,
   Clock,
   CheckSquare,
-  X
+  X,
+  PieChart
 } from "lucide-react";
 import Link from "next/link";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -156,6 +157,7 @@ function RoleGuard({ children, pathname }: { children: React.ReactNode, pathname
                 <SidebarLink href="/staff/hours" icon={<Clock size={18} />} label="تقرير ساعات العمل" active={pathname === '/staff/hours'} />
                 <SidebarLink href="/payroll" icon={<Wallet size={18} />} label="مسير الرواتب" active={pathname === '/payroll'} />
                 <SidebarLink href="/expenses" icon={<CreditCard size={18} />} label="المصروفات والتحليلات" active={pathname === '/expenses'} />
+                <SidebarLink href="/reports/income-allocation" icon={<PieChart size={18} />} label="توزيع الدخل" active={pathname === '/reports/income-allocation'} />
                 <SidebarLink href="/offers" icon={<Tag size={18} />} label="إدارة العروض" active={pathname === '/offers'} />
                 <SidebarLink href="/investors" icon={<Coins size={18} />} label="شؤون المستثمرين" active={pathname === '/investors'} />
                 <SidebarLink href="/settings" icon={<Settings size={18} />} label="الإعدادات العامة" active={pathname === '/settings'} />
