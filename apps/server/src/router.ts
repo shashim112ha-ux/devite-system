@@ -823,6 +823,18 @@ export const appRouter = router({
       return order;
     }),
 
+  debugIncome: publicProcedure.query(async ({ ctx }) => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const orders = await ctx.prisma.order.findMany({
+        where: { createdAt: { gte: today } }
+      });
+      return {
+        todayUtc: today.toISOString(),
+        allOrdersToday: orders.map(o => ({ id: o.id, total: o.total, status: o.status, createdAt: o.createdAt.toISOString() })),
+      };
+    }),
+
   getCustomer: publicProcedure
     .input(z.object({ phone: z.string() }))
     .query(async ({ input, ctx }) => {
@@ -2613,7 +2625,7 @@ export const appRouter = router({
       const count = expenses.length;
 
       const sales = await ctx.prisma.order.findMany({
-        where: dateFilter ? { createdAt: dateFilter } : undefined
+        where: { ...(dateFilter ? { createdAt: dateFilter } : {}), status: { not: 'CANCELLED' } }
       });
       const totalSales = sales.reduce((sum, o) => sum + o.total, 0);
       const percentageOfSales = totalSales > 0 ? (total / totalSales) * 100 : 0;
@@ -2981,14 +2993,14 @@ export const appRouter = router({
 
       const [data, total] = await Promise.all([
         ctx.prisma.order.findMany({
-          where: dateFilter ? { createdAt: dateFilter } : undefined,
+          where: { ...(dateFilter ? { createdAt: dateFilter } : {}), status: { not: 'CANCELLED' } },
           include: { items: { include: { product: true } } },
           orderBy: { createdAt: 'desc' },
           take: limit,
           skip
         }),
         ctx.prisma.order.count({
-          where: dateFilter ? { createdAt: dateFilter } : undefined
+          where: { ...(dateFilter ? { createdAt: dateFilter } : {}), status: { not: 'CANCELLED' } }
         })
       ]);
 
@@ -3017,7 +3029,7 @@ export const appRouter = router({
         }
       }
       const orders = await ctx.prisma.order.findMany({
-        where: dateFilter ? { createdAt: dateFilter } : undefined,
+        where: { ...(dateFilter ? { createdAt: dateFilter } : {}), status: { not: 'CANCELLED' } },
         include: { items: { include: { product: true } } }
       });
       const totalSales = orders.reduce((sum, o) => sum + o.total, 0);
