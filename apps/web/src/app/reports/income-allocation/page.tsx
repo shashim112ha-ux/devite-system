@@ -25,12 +25,15 @@ function fmt(n: number) {
 
 function getPeriodDates(period: string, customFrom: string, customTo: string) {
   const now = new Date();
-  const today = new Date(now); today.setHours(0,0,0,0);
-  if (period === 'today') return { from: today.toISOString().slice(0,10), to: today.toISOString().slice(0,10) };
-  if (period === 'week') { const s = new Date(today); s.setDate(s.getDate() - s.getDay()); return { from: s.toISOString().slice(0,10), to: today.toISOString().slice(0,10) }; }
-  if (period === 'month') { const s = new Date(today.getFullYear(), today.getMonth(), 1); return { from: s.toISOString().slice(0,10), to: today.toISOString().slice(0,10) }; }
-  if (period === 'year') { const s = new Date(today.getFullYear(), 0, 1); return { from: s.toISOString().slice(0,10), to: today.toISOString().slice(0,10) }; }
-  if (period === 'all') { return { from: '2020-01-01', to: today.toISOString().slice(0,10) }; }
+  function formatLocal(d: Date) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  const todayStr = formatLocal(now);
+  if (period === 'today') return { from: todayStr, to: todayStr };
+  if (period === 'week') { const s = new Date(now); s.setDate(s.getDate() - s.getDay()); return { from: formatLocal(s), to: todayStr }; }
+  if (period === 'month') { const s = new Date(now.getFullYear(), now.getMonth(), 1); return { from: formatLocal(s), to: todayStr }; }
+  if (period === 'year') { const s = new Date(now.getFullYear(), 0, 1); return { from: formatLocal(s), to: todayStr }; }
+  if (period === 'all') { return { from: '2020-01-01', to: todayStr }; }
   return { from: customFrom, to: customTo };
 }
 
